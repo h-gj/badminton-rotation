@@ -1,0 +1,13 @@
+venv/
+__pycache__/
+*.py[cod]
+*.sqlite3
+db.sqlite3
+.env
+.idea/
+.vscode/
+*.log
+assets/
+.cursor/
+py_err.txt
+py_out.txt

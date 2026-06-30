@@ -1,0 +1,192 @@
+{% extends 'rotation/base.html' %}
+{% block title %}对局计分 - {{ session.title }}{% endblock %}
+{% block content %}
+<div class="session-page">
+  {% include 'rotation/includes/session_tabs.html' with active_tab='matches' %}
+
+  <div class="session-info-card">
+    <div class="session-info-title">{{ session.title }}</div>
+    {% include 'rotation/includes/session_progress.html' %}
+  </div>
+
+  {% for m in flat_matches %}
+  <div class="match-card">
+    <div class="match-card-side">
+      <span class="match-card-num">{{ m.match_number }}</span>
+      {% if m.is_completed %}
+      <span class="match-card-check">✓</span>
+      {% else %}
+      <span class="match-card-check pending">·</span>
+      {% endif %}
+    </div>
+    <div class="match-card-body">
+      <div class="match-teams">
+        <div class="match-team">
+          <div class="match-team-players">
+            <div class="match-player">
+              {% include 'rotation/includes/player_avatar.html' with player=m.team1_player1 size='sm' %}
+              {{ m.team1_player1.display_name }}
+            </div>
+            <div class="match-player">
+              {% include 'rotation/includes/player_avatar.html' with player=m.team1_player2 size='sm' %}
+              {{ m.team1_player2.display_name }}
+            </div>
+          </div>
+        </div>
+
+        <div class="match-score-box">
+          <form method="post" action="{% url 'match_score' m.pk %}" class="match-score-form">
+            {% csrf_token %}
+            <div class="match-score-inputs">
+              <input type="number" name="score_team1" min="0" max="30"
+                     value="{% if m.score_team1 is not None %}{{ m.score_team1 }}{% endif %}"
+                     class="form-control match-score-input" placeholder="0">
+              <button type="button" class="match-score-swap" title="对调比分">⇄</button>
+              <input type="number" name="score_team2" min="0" max="30"
+                     value="{% if m.score_team2 is not None %}{{ m.score_team2 }}{% endif %}"
+                     class="form-control match-score-input" placeholder="0">
+            </div>
+            <div class="match-score-quick">
+              <button type="button" class="score-quick-btn" data-s1="19" data-s2="21">19:21</button>
+              <button type="button" class="score-quick-btn" data-s1="18" data-s2="21">18:21</button>
+              <button type="button" class="score-quick-btn" data-s1="17" data-s2="21">17:21</button>
+              <button type="button" class="score-quick-btn" data-s1="16" data-s2="21">16:21</button>
+            </div>
+            {% if m.is_completed %}
+            <div class="match-diff">净胜 {{ m.score_diff }}</div>
+            {% endif %}
+          </form>
+        </div>
+
+        <div class="match-team">
+          <div class="match-team-players">
+            <div class="match-player">
+              {% include 'rotation/includes/player_avatar.html' with player=m.team2_player1 size='sm' %}
+              {{ m.team2_player1.display_name }}
+            </div>
+            <div class="match-player">
+              {% include 'rotation/includes/player_avatar.html' with player=m.team2_player2 size='sm' %}
+              {{ m.team2_player2.display_name }}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="match-meta">
+        <span>第 {{ m.round_number }} 轮 · 场地 {{ m.court_number }}</span>
+      </div>
+    </div>
+  </div>
+  {% empty %}
+  <div class="session-info-card text-center text-muted py-4">
+    <p class="mb-2">还没有对阵</p>
+    <a href="{% url 'session_detail' session.pk %}" class="btn btn-primary btn-sm">返回报名页生成对阵</a>
+  </div>
+  {% endfor %}
+
+  {% if flat_matches %}
+  <div class="session-action-bar">
+    <a href="{% url 'session_leaderboard' session.pk %}" class="btn btn-primary">查看成绩</a>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+function canSubmitScore(form) {
+  var s1 = form.querySelector('[name=score_team1]').value;
+  var s2 = form.querySelector('[name=score_team2]').value;
+  return s1 !== '' && s2 !== '';
+}
+
+function submitScoreForm(form) {
+  if (canSubmitScore(form)) {
+    form.submit();
+  }
+}
+
+document.querySelectorAll('.match-score-swap').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    var form = btn.closest('.match-score-form');
+    var s1 = form.querySelector('[name=score_team1]');
+    var s2 = form.querySelector('[name=score_team2]');
+    var tmp = s1.value;
+    s1.value = s2.value;
+    s2.value = tmp;
+    submitScoreForm(form);
+  });
+});
+
+document.querySelectorAll('.score-quick-btn').forEach(function (btn) {
+  btn.addEventListener('mousedown', function (e) {
+    e.preventDefault();
+  });
+  btn.addEventListener('click', function () {
+    var form = btn.closest('.match-score-form');
+    form.querySelector('[name=score_team1]').value = btn.dataset.s1;
+    form.querySelector('[name=score_team2]').value = btn.dataset.s2;
+    form.submit();
+  });
+});
+
+function autoFillOtherScore(changedInput) {
+  if (changedInput.value === '') {
+    return;
+  }
+  var val = parseInt(changedInput.value, 10);
+  if (isNaN(val)) {
+    return;
+  }
+
+  var form = changedInput.closest('.match-score-form');
+  var other = changedInput.name === 'score_team1'
+    ? form.querySelector('[name=score_team2]')
+    : form.querySelector('[name=score_team1]');
+
+  if (val <= 19) {
+    other.value = 21;
+  } else if (val === 20) {
+    other.value = 22;
+  }
+}
+
+var autoFillTimers = new WeakMap();
+
+function scheduleAutoFill(input) {
+  var prev = autoFillTimers.get(input);
+  if (prev) {
+    clearTimeout(prev);
+  }
+  autoFillTimers.set(input, setTimeout(function () {
+    autoFillOtherScore(input);
+  }, 500));
+}
+
+function flushAutoFill(input) {
+  var prev = autoFillTimers.get(input);
+  if (prev) {
+    clearTimeout(prev);
+    autoFillTimers.delete(input);
+  }
+  autoFillOtherScore(input);
+}
+
+document.querySelectorAll('.match-score-input').forEach(function (input) {
+  input.addEventListener('input', function () {
+    scheduleAutoFill(input);
+  });
+  input.addEventListener('change', function () {
+    flushAutoFill(input);
+  });
+  input.addEventListener('blur', function () {
+    flushAutoFill(input);
+  });
+  input.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      flushAutoFill(input);
+      submitScoreForm(input.closest('.match-score-form'));
+    }
+  });
+});
+</script>
+{% endblock %}

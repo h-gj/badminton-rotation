@@ -1,0 +1,89 @@
+{% extends 'rotation/base.html' %}
+{% block title %}{{ player.display_name }} - 统计{% endblock %}
+{% block content %}
+<h2 class="mb-1">{{ player.display_name }}</h2>
+<p class="text-muted mb-4">历史战绩统计</p>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="card text-center p-3">
+      <div class="fs-3 fw-bold text-success">{{ stats.total.wins }}</div>
+      <div class="text-muted">胜场</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card text-center p-3">
+      <div class="fs-3 fw-bold text-danger">{{ stats.total.losses }}</div>
+      <div class="text-muted">负场</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card text-center p-3">
+      <div class="fs-3 fw-bold">{{ stats.total.matches }}</div>
+      <div class="text-muted">总场次</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card text-center p-3">
+      <div class="fs-3 fw-bold text-primary">{{ stats.total.win_rate }}%</div>
+      <div class="text-muted">总胜率</div>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header fw-bold">搭档胜率</div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>搭档</th>
+          <th>胜/负</th>
+          <th>场次</th>
+          <th>胜率</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in stats.partners %}
+        <tr>
+          <td>{{ p.partner.display_name }}</td>
+          <td>{{ p.wins }}/{{ p.losses }}</td>
+          <td>{{ p.matches }}</td>
+          <td>{{ p.win_rate }}%</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" class="text-center text-muted py-4">暂无搭档数据</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header fw-bold">各场次表现</div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>活动</th>
+          <th>日期</th>
+          <th>胜/负</th>
+          <th>场次</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in stats.sessions %}
+        <tr>
+          <td><a href="{% url 'session_detail' s.session.pk %}">{{ s.session.title }}</a></td>
+          <td>{{ s.session.event_date|date:"Y-m-d H:i" }}</td>
+          <td>{{ s.wins }}/{{ s.losses }}</td>
+          <td>{{ s.matches }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" class="text-center text-muted py-4">暂无活动记录</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

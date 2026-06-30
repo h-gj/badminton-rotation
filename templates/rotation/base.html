@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}羽毛球轮转{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background: #f0f2f5; }
+    .navbar { background: linear-gradient(90deg, #0d6efd, #198754); }
+    .card { border: none; box-shadow: 0 2px 12px rgba(0,0,0,.06); }
+    .badge-status-open { background: #198754; }
+    .badge-status-scheduled { background: #0dcaf0; color: #000; }
+    .badge-status-in_progress { background: #ffc107; color: #000; }
+    .badge-status-completed { background: #6c757d; }
+
+    /* Session page layout */
+    .session-page { max-width: 520px; margin: 0 auto; }
+
+    /* Tabs */
+    .session-tabs {
+      display: flex;
+      background: #fff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 1px 8px rgba(0,0,0,.06);
+    }
+    .session-tab {
+      flex: 1;
+      text-align: center;
+      padding: .75rem .5rem;
+      font-size: .875rem;
+      color: #666;
+      text-decoration: none;
+      border-bottom: 2px solid transparent;
+      transition: all .15s;
+    }
+    .session-tab:hover { color: #333; background: #f8f9fa; }
+    .session-tab.active {
+      color: #333;
+      font-weight: 600;
+      background: #eef6ff;
+      border-bottom-color: #ff6b6b;
+    }
+
+    /* Info card */
+    .session-info-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      box-shadow: 0 1px 8px rgba(0,0,0,.06);
+      margin-bottom: .75rem;
+    }
+    .session-info-title {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: .75rem;
+      padding-bottom: .75rem;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .session-info-row {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      padding: .5rem 0;
+      font-size: .875rem;
+      color: #444;
+    }
+    .session-info-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: #eef6ff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: .875rem;
+      flex-shrink: 0;
+    }
+
+    /* Progress bar */
+    .session-progress-label { font-size: .8125rem; color: #666; }
+    .session-progress-count { font-size: .8125rem; color: #0d6efd; font-weight: 600; }
+    .session-progress-bar {
+      height: 6px;
+      background: #e9ecef;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .session-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #0d6efd, #4dabf7);
+      border-radius: 3px;
+      transition: width .3s;
+    }
+
+    /* Player avatar */
+    .player-avatar {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+      color: #2563eb;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .player-avatar-sm { width: 32px; height: 32px; font-size: .8125rem; }
+    .player-avatar-md { width: 40px; height: 40px; font-size: .9375rem; }
+    .player-avatar-lg { width: 48px; height: 48px; font-size: 1.125rem; }
+
+    /* Registration list */
+    .reg-list-card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 1px 8px rgba(0,0,0,.06);
+      overflow: hidden;
+    }
+    .reg-list-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: .875rem 1.25rem;
+      border-bottom: 1px solid #f0f0f0;
+      font-weight: 600;
+      font-size: .9375rem;
+    }
+    .reg-list-count { color: #666; font-weight: 400; font-size: .8125rem; }
+    .reg-item {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      margin: .5rem 1rem;
+      padding: .625rem .875rem;
+      background: #f5f6f8;
+      border-radius: 10px;
+    }
+    .reg-item-num {
+      width: 20px;
+      text-align: center;
+      color: #999;
+      font-size: .8125rem;
+      flex-shrink: 0;
+    }
+    .reg-item-name { font-size: .9375rem; font-weight: 500; }
+
+    /* Match card */
+    .match-card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 1px 8px rgba(0,0,0,.06);
+      margin-bottom: .75rem;
+      display: flex;
+      overflow: hidden;
+    }
+    .match-card-side {
+      width: 44px;
+      background: linear-gradient(180deg, #0d6efd, #4dabf7);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: .75rem 0;
+      flex-shrink: 0;
+    }
+    .match-card-num {
+      color: #fff;
+      font-size: 1.25rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .match-card-check {
+      margin-top: .5rem;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #22c55e;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: .75rem;
+    }
+    .match-card-check.pending {
+      background: #e9ecef;
+      color: #adb5bd;
+    }
+    .match-card-body { flex: 1; padding: .875rem 1rem; min-width: 0; }
+    .match-teams {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+    }
+    .match-team { flex: 1; min-width: 0; }
+    .match-team-players { display: flex; flex-direction: column; gap: .375rem; }
+    .match-player {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      font-size: .8125rem;
+      font-weight: 500;
+    }
+    .match-score-box { text-align: center; flex-shrink: 0; padding: 0 .25rem; }
+    .match-score-form { display: flex; flex-direction: column; align-items: center; }
+    .match-score-inputs {
+      display: flex;
+      align-items: center;
+      gap: .25rem;
+    }
+    .match-score-input {
+      width: 46px;
+      text-align: center;
+      padding: .25rem .125rem;
+      font-weight: 700;
+      font-size: 1.125rem;
+      border-radius: 8px;
+    }
+    .match-score-swap {
+      width: 28px;
+      height: 28px;
+      border: 1px solid #dee2e6;
+      border-radius: 50%;
+      background: #f8f9fa;
+      color: #0d6efd;
+      font-size: .875rem;
+      line-height: 1;
+      padding: 0;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background .15s, border-color .15s;
+    }
+    .match-score-swap:hover {
+      background: #eef6ff;
+      border-color: #0d6efd;
+    }
+    .match-score-quick {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: .25rem;
+      margin-top: .375rem;
+    }
+    .score-quick-btn {
+      border: 1px solid #dee2e6;
+      background: #fff;
+      color: #495057;
+      font-size: .6875rem;
+      padding: .125rem .375rem;
+      border-radius: 999px;
+      cursor: pointer;
+      line-height: 1.4;
+      transition: all .15s;
+    }
+    .score-quick-btn:hover {
+      background: #eef6ff;
+      border-color: #0d6efd;
+      color: #0d6efd;
+    }
+    .match-diff { font-size: .6875rem; color: #999; margin-top: .375rem; }
+    .match-meta {
+      margin-top: .625rem;
+      padding-top: .625rem;
+      border-top: 1px solid #f0f0f0;
+      font-size: .6875rem;
+      color: #999;
+      display: flex;
+      gap: .75rem;
+      flex-wrap: wrap;
+    }
+
+    /* Leaderboard */
+    .leaderboard-card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 1px 8px rgba(0,0,0,.06);
+      overflow: hidden;
+    }
+    .leaderboard-table { margin-bottom: 0; }
+    .leaderboard-table thead th {
+      font-size: .8125rem;
+      font-weight: 600;
+      color: #666;
+      border-bottom: 1px solid #f0f0f0;
+      padding: .75rem .5rem;
+      background: #fff;
+    }
+    .leaderboard-table tbody td {
+      padding: .75rem .5rem;
+      vertical-align: middle;
+      border-bottom: 1px solid #f8f8f8;
+    }
+    .leaderboard-row:last-child td { border-bottom: none; }
+    .leaderboard-top-1 { background: linear-gradient(90deg, rgba(255,107,107,.12), transparent); }
+    .leaderboard-top-2 { background: linear-gradient(90deg, rgba(255,193,7,.15), transparent); }
+    .leaderboard-top-3 { background: linear-gradient(90deg, rgba(77,171,247,.12), transparent); }
+    .rank-medal {
+      font-size: 1.625rem;
+      line-height: 1;
+      display: inline-block;
+    }
+    .rank-badge {
+      display: inline-block;
+      font-size: 1.375rem;
+      font-weight: 800;
+      line-height: 1;
+      min-width: 28px;
+      text-align: center;
+    }
+    .rank-badge-n { color: #adb5bd; font-size: 1rem; font-weight: 600; }
+    .leaderboard-player-cell {
+      display: flex;
+      align-items: center;
+      gap: .625rem;
+    }
+    .leaderboard-player-name {
+      font-size: .875rem;
+      font-weight: 500;
+      color: #333;
+      text-decoration: none;
+    }
+    .leaderboard-player-name:hover { color: #0d6efd; }
+    .leaderboard-wl { font-size: .875rem; font-weight: 600; white-space: nowrap; }
+    .leaderboard-wl .wl-win { color: #ef4444; }
+    .leaderboard-wl .wl-loss { color: #333; }
+    .leaderboard-points {
+      font-size: .875rem;
+      font-weight: 600;
+      color: #333;
+    }
+
+    /* Partner stats */
+    .partner-card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 1px 8px rgba(0,0,0,.06);
+      margin-bottom: .75rem;
+      overflow: hidden;
+    }
+    .partner-card-header {
+      padding: .625rem 1rem;
+      font-size: .8125rem;
+      font-weight: 600;
+      color: #666;
+      background: #f8f9fa;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    /* Bottom action bar */
+    .session-action-bar {
+      display: flex;
+      gap: .5rem;
+      margin-top: 1rem;
+      padding-bottom: 1rem;
+    }
+    .session-action-bar .btn { flex: 1; }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-dark mb-4">
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="{% url 'home' %}">🏸 羽毛球轮转</a>
+      <div class="d-flex gap-2">
+        <a class="btn btn-outline-light btn-sm" href="{% url 'player_list' %}">球员</a>
+        <a class="btn btn-light btn-sm" href="{% url 'session_create' %}">创建活动</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container pb-5">
+    {% if messages %}
+      {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+          {{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      {% endfor %}
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

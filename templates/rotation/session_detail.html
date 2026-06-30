@@ -1,0 +1,62 @@
+{% extends 'rotation/base.html' %}
+{% block title %}{{ session.title }} - 羽毛球轮转{% endblock %}
+{% block content %}
+<div class="session-page">
+  {% include 'rotation/includes/session_tabs.html' with active_tab='info' %}
+
+  <div class="session-info-card">
+    <div class="session-info-title">{{ session.title }}</div>
+    <div class="session-info-row">
+      <span class="session-info-icon">🏸</span>
+      <span>多人轮转赛 · {{ session.reg_count }} 人</span>
+    </div>
+    <div class="session-info-row">
+      <span class="session-info-icon">🕐</span>
+      <span>{{ session.event_date|date:"Y-m-d H:i" }}</span>
+    </div>
+    <div class="session-info-row">
+      <span class="session-info-icon">📍</span>
+      <span>{{ session.location|default:"未填场地" }}</span>
+    </div>
+    <div class="session-info-row">
+      <span class="session-info-icon">📋</span>
+      <span>
+        <span class="badge badge-status-{{ session.status }}">{{ session.get_status_display }}</span>
+        {% if match_count %} · {{ completed_count }}/{{ match_count }} 场已录分{% endif %}
+      </span>
+    </div>
+  </div>
+
+  <div class="reg-list-card">
+    <div class="reg-list-header">
+      <span>报名名单</span>
+      <span class="reg-list-count">{{ session.reg_count }}/{{ session.max_players }}
+        <span class="badge badge-status-{{ session.status }} ms-1">{{ session.get_status_display }}</span>
+      </span>
+    </div>
+    {% for reg in registrations %}
+    <div class="reg-item">
+      <span class="reg-item-num">{{ forloop.counter }}</span>
+      {% include 'rotation/includes/player_avatar.html' with player=reg.player size='md' %}
+      <span class="reg-item-name">{{ reg.player.display_name }}</span>
+    </div>
+    {% empty %}
+    <div class="text-center text-muted py-4 small">暂无报名，至少需要 4 人才能生成对阵</div>
+    {% endfor %}
+  </div>
+
+  <div class="session-action-bar">
+    {% if session.status == 'open' %}
+    <a href="{% url 'session_register' session.pk %}" class="btn btn-outline-primary btn-sm">添加报名</a>
+    {% endif %}
+    {% if session.can_generate %}
+    <form method="post" action="{% url 'session_generate' session.pk %}" class="flex-fill d-flex">
+      {% csrf_token %}
+      <button class="btn btn-primary btn-sm w-100">生成对阵</button>
+    </form>
+    {% elif match_count %}
+    <a href="{% url 'session_matches' session.pk %}" class="btn btn-primary btn-sm">查看对阵</a>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

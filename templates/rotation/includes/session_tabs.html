@@ -1,0 +1,8 @@
+<nav class="session-tabs mb-3">
+  <a href="{% url 'session_detail' session.pk %}"
+     class="session-tab{% if active_tab == 'info' %} active{% endif %}">报名信息</a>
+  <a href="{% url 'session_matches' session.pk %}"
+     class="session-tab{% if active_tab == 'matches' %} active{% endif %}">对局计分</a>
+  <a href="{% url 'session_leaderboard' session.pk %}"
+     class="session-tab{% if active_tab == 'leaderboard' %} active{% endif %}">比赛成绩</a>
+</nav>
