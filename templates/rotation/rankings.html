@@ -1,0 +1,303 @@
+{% extends 'rotation/base.html' %}
+{% block title %}排行榜{% endblock %}
+{% block content %}
+<div class="rankings-page player-page" id="rankingsPage"
+     data-api-url="{% url 'rankings' %}"
+     data-initial-tab="{{ tab }}">
+  <div class="player-page-header">
+    <h2 class="player-page-title">排行榜</h2>
+    <p class="player-page-subtitle" id="rankingsSubtitle">加载中…</p>
+  </div>
+
+  <div class="session-tabs rankings-tabs" id="rankingsTabs" role="tablist">
+    <a href="#" class="session-tab rankings-tab{% if tab == 'win_rate' %} active{% endif %}"
+       data-tab="win_rate" role="tab">胜率</a>
+    <a href="#" class="session-tab rankings-tab{% if tab == 'attendance' %} active{% endif %}"
+       data-tab="attendance" role="tab">出勤率</a>
+    <a href="#" class="session-tab rankings-tab{% if tab == 'partner' %} active{% endif %}"
+       data-tab="partner" role="tab">搭档胜率</a>
+  </div>
+
+  <div class="player-list-search-wrap" id="rankingsSearchWrap" hidden>
+    <input type="search" id="rankingsSearch" class="form-control player-list-search"
+           placeholder="搜索姓名或昵称…" autocomplete="off">
+  </div>
+
+  <div class="player-list-card" id="rankingsCard">
+    <div class="player-list-placeholder" id="rankingsLoading">加载中…</div>
+  </div>
+
+  <nav class="player-list-pagination" id="rankingsPagination" aria-label="排行榜分页" hidden>
+    <button type="button" class="player-list-page-btn" id="rankingsPrev" disabled>上一页</button>
+    <span class="player-list-page-info" id="rankingsPageInfo">1 / 1</span>
+    <button type="button" class="player-list-page-btn" id="rankingsNext" disabled>下一页</button>
+  </nav>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var pageEl = document.getElementById('rankingsPage');
+  if (!pageEl) return;
+
+  var apiUrl = pageEl.dataset.apiUrl;
+  var subtitleEl = document.getElementById('rankingsSubtitle');
+  var tabsEl = document.getElementById('rankingsTabs');
+  var searchWrap = document.getElementById('rankingsSearchWrap');
+  var searchInput = document.getElementById('rankingsSearch');
+  var cardEl = document.getElementById('rankingsCard');
+  var paginationEl = document.getElementById('rankingsPagination');
+  var prevBtn = document.getElementById('rankingsPrev');
+  var nextBtn = document.getElementById('rankingsNext');
+  var pageInfoEl = document.getElementById('rankingsPageInfo');
+
+  var TAB_LABELS = {
+    win_rate: '胜率',
+    attendance: '出勤率',
+    partner: '搭档胜率',
+  };
+
+  var state = {
+    tab: pageEl.dataset.initialTab || 'win_rate',
+    page: 1,
+    q: '',
+    loading: false,
+    totalSessions: null,
+  };
+  var searchTimer = null;
+
+  function escapeHtml(text) {
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function avatarHtml(player, sizeClass) {
+    sizeClass = sizeClass || 'player-avatar-md';
+    if (player.avatar_url) {
+      return '<img src="' + escapeHtml(player.avatar_url) + '" alt="" class="player-avatar ' + sizeClass + ' player-avatar-img">';
+    }
+    var initial = player.display_name ? player.display_name.slice(0, 1) : '?';
+    return '<span class="player-avatar ' + sizeClass + '">' + escapeHtml(initial) + '</span>';
+  }
+
+  function rankHtml(rank) {
+    if (rank === 1) {
+      return '<span class="rankings-rank"><span class="rank-medal" title="冠军">🥇</span></span>';
+    }
+    if (rank === 2) {
+      return '<span class="rankings-rank"><span class="rank-medal" title="亚军">🥈</span></span>';
+    }
+    if (rank === 3) {
+      return '<span class="rankings-rank"><span class="rank-medal" title="季军">🥉</span></span>';
+    }
+    return '<span class="rankings-rank rankings-rank-n">' + rank + '</span>';
+  }
+
+  function renderWinRateItem(item) {
+    return (
+      '<a href="' + escapeHtml(item.detail_url) + '" class="rankings-item">' +
+        rankHtml(item.rank) +
+        avatarHtml(item) +
+        '<div class="rankings-info">' +
+          '<div class="rankings-name">' + escapeHtml(item.display_name) + '</div>' +
+          '<div class="rankings-meta">' + item.wins + ' 胜 ' + item.losses + ' 负 · ' + item.matches + ' 场</div>' +
+        '</div>' +
+        '<div class="rankings-stat">' +
+          '<div class="rankings-stat-value">' + item.win_rate + '%</div>' +
+          '<div class="rankings-stat-label">胜率</div>' +
+        '</div>' +
+      '</a>'
+    );
+  }
+
+  function renderAttendanceItem(item) {
+    return (
+      '<a href="' + escapeHtml(item.detail_url) + '" class="rankings-item">' +
+        rankHtml(item.rank) +
+        avatarHtml(item) +
+        '<div class="rankings-info">' +
+          '<div class="rankings-name">' + escapeHtml(item.display_name) + '</div>' +
+          '<div class="rankings-meta">参与 ' + item.sessions_attended + ' / ' + item.total_sessions + ' 场活动</div>' +
+        '</div>' +
+        '<div class="rankings-stat">' +
+          '<div class="rankings-stat-value">' + item.attendance_rate + '%</div>' +
+          '<div class="rankings-stat-label">出勤率</div>' +
+        '</div>' +
+      '</a>'
+    );
+  }
+
+  function renderPartnerItem(item) {
+    return (
+      '<div class="rankings-item-static">' +
+        rankHtml(item.rank) +
+        '<div class="rankings-partner-avatars">' +
+          avatarHtml(item.player1, 'player-avatar-sm') +
+          avatarHtml(item.player2, 'player-avatar-sm') +
+        '</div>' +
+        '<div class="rankings-info">' +
+          '<div class="rankings-partner-names">' +
+            '<a href="' + escapeHtml(item.player1.detail_url) + '">' + escapeHtml(item.player1.display_name) + '</a>' +
+            '<span class="rankings-partner-sep">&</span>' +
+            '<a href="' + escapeHtml(item.player2.detail_url) + '">' + escapeHtml(item.player2.display_name) + '</a>' +
+          '</div>' +
+          '<div class="rankings-meta">' + item.wins + ' 胜 ' + item.losses + ' 负 · ' + item.matches + ' 场</div>' +
+        '</div>' +
+        '<div class="rankings-stat">' +
+          '<div class="rankings-stat-value">' + item.win_rate + '%</div>' +
+          '<div class="rankings-stat-label">胜率</div>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  function emptyMessage() {
+    if (state.q) return '没有匹配的排行数据';
+    if (state.tab === 'win_rate') return '暂无比赛数据，完成计分后会出现在这里';
+    if (state.tab === 'attendance') return '暂无出勤数据，球员报名活动后会出现在这里';
+    return '暂无搭档数据，完成双打计分后会出现在这里';
+  }
+
+  function updateSubtitle(data) {
+    var label = TAB_LABELS[state.tab] || '';
+    if (state.tab === 'attendance' && data.total_sessions != null) {
+      subtitleEl.textContent = '共 ' + data.total + ' 人 · 已有 ' + data.total_sessions + ' 场活动 · 按' + label + '排序';
+    } else {
+      subtitleEl.textContent = '共 ' + data.total + ' 条 · 按' + label + '排序';
+    }
+  }
+
+  function renderRankings(data) {
+    if (data.total_sessions != null) {
+      state.totalSessions = data.total_sessions;
+    }
+
+    if (!data.total && !state.q) {
+      searchWrap.hidden = true;
+      paginationEl.hidden = true;
+      updateSubtitle({ total: 0, total_sessions: state.totalSessions });
+      cardEl.innerHTML = '<div class="player-list-placeholder">' + emptyMessage() + '</div>';
+      return;
+    }
+
+    searchWrap.hidden = false;
+    updateSubtitle(data);
+
+    if (!data.items.length) {
+      cardEl.innerHTML = '<div class="player-list-placeholder">' + emptyMessage() + '</div>';
+    } else {
+      var renderFn = renderWinRateItem;
+      if (state.tab === 'attendance') renderFn = renderAttendanceItem;
+      if (state.tab === 'partner') renderFn = renderPartnerItem;
+      cardEl.innerHTML = data.items.map(renderFn).join('');
+    }
+
+    if (data.num_pages > 1) {
+      paginationEl.hidden = false;
+      pageInfoEl.textContent = data.page + ' / ' + data.num_pages;
+      prevBtn.disabled = !data.has_previous;
+      nextBtn.disabled = !data.has_next;
+    } else {
+      paginationEl.hidden = true;
+    }
+  }
+
+  function syncUrl() {
+    var params = new URLSearchParams();
+    if (state.tab !== 'win_rate') params.set('tab', state.tab);
+    if (state.page > 1) params.set('page', state.page);
+    if (state.q) params.set('q', state.q);
+    var qs = params.toString();
+    history.replaceState(null, '', qs ? ('?' + qs) : window.location.pathname);
+  }
+
+  function setActiveTab(tab) {
+    state.tab = tab;
+    var tabs = tabsEl.querySelectorAll('.rankings-tab');
+    tabs.forEach(function (el) {
+      el.classList.toggle('active', el.dataset.tab === tab);
+    });
+  }
+
+  function loadRankings(page) {
+    if (state.loading) return;
+    state.page = page || 1;
+    state.loading = true;
+    cardEl.innerHTML = '<div class="player-list-placeholder">加载中…</div>';
+
+    var params = new URLSearchParams({
+      tab: state.tab,
+      page: state.page,
+    });
+    if (state.q) params.set('q', state.q);
+
+    fetch(apiUrl + '?' + params.toString(), {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      credentials: 'same-origin',
+    }).then(function (resp) {
+      return resp.json();
+    }).then(function (data) {
+      state.loading = false;
+      renderRankings(data);
+      syncUrl();
+    }).catch(function () {
+      state.loading = false;
+      subtitleEl.textContent = '加载失败';
+      cardEl.innerHTML = '<div class="player-list-placeholder">加载失败，请刷新重试</div>';
+    });
+  }
+
+  tabsEl.addEventListener('click', function (e) {
+    var tabEl = e.target.closest('.rankings-tab');
+    if (!tabEl) return;
+    e.preventDefault();
+    var tab = tabEl.dataset.tab;
+    if (tab === state.tab) return;
+    setActiveTab(tab);
+    state.page = 1;
+    loadRankings(1);
+  });
+
+  prevBtn.addEventListener('click', function () {
+    if (state.page > 1) loadRankings(state.page - 1);
+  });
+
+  nextBtn.addEventListener('click', function () {
+    loadRankings(state.page + 1);
+  });
+
+  searchInput.addEventListener('input', function () {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(function () {
+      state.q = searchInput.value.trim();
+      loadRankings(1);
+    }, 400);
+  });
+
+  searchInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      clearTimeout(searchTimer);
+      state.q = searchInput.value.trim();
+      loadRankings(1);
+    }
+  });
+
+  var initial = new URLSearchParams(window.location.search);
+  state.tab = initial.get('tab') || state.tab;
+  if (['win_rate', 'attendance', 'partner'].indexOf(state.tab) === -1) {
+    state.tab = 'win_rate';
+  }
+  setActiveTab(state.tab);
+  state.page = parseInt(initial.get('page') || '1', 10) || 1;
+  state.q = initial.get('q') || '';
+  if (state.q) searchInput.value = state.q;
+
+  loadRankings(state.page);
+})();
+</script>
+{% endblock %}

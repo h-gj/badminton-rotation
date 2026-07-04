@@ -1,0 +1,22 @@
+{% extends 'rotation/base.html' %}
+{% block title %}选择俱乐部 - 羽转{% endblock %}
+{% block content %}
+<div class="session-page auth-page">
+  <div class="auth-card">
+    <h2 class="auth-title">加入羽转</h2>
+    <p class="auth-subtitle">创建新俱乐部，或从列表中加入已有俱乐部，二选一即可开始使用</p>
+    <div class="club-setup-actions">
+      <a href="{% url 'club_create' %}" class="club-setup-option">
+        <span class="club-setup-option-icon">🏸</span>
+        <span class="club-setup-option-title">创建俱乐部</span>
+        <span class="club-setup-option-desc">我是组织者，新建一个俱乐部</span>
+      </a>
+      <a href="{% url 'club_join' %}" class="club-setup-option">
+        <span class="club-setup-option-icon">🤝</span>
+        <span class="club-setup-option-title">加入俱乐部</span>
+        <span class="club-setup-option-desc">从列表中选择已有俱乐部加入</span>
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,27 @@
+{% extends 'rotation/base.html' %}
+{% block title %}注册 - 羽转{% endblock %}
+{% block content %}
+<div class="session-page auth-page">
+  <div class="auth-card">
+    <h2 class="auth-title">注册羽转</h2>
+    <p class="auth-subtitle">创建账号后，先建立你的羽毛球俱乐部</p>
+    <form method="post" class="auth-form">
+      {% csrf_token %}
+      {% for field in form %}
+      <div class="mb-3">
+        <label class="form-label">{{ field.label }}</label>
+        {{ field }}
+        {% if field.errors %}
+        <div class="text-danger small">{{ field.errors.0 }}</div>
+        {% endif %}
+        {% if field.help_text %}
+        <div class="form-text">{{ field.help_text }}</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+      <button type="submit" class="btn btn-primary btn-lg w-100 auth-submit">注册</button>
+    </form>
+    <p class="auth-switch">已有账号？<a href="{% url 'login' %}">去登录</a></p>
+  </div>
+</div>
+{% endblock %}

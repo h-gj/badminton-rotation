@@ -1,0 +1,30 @@
+{% extends 'rotation/base.html' %}
+{% block title %}登录 - 羽转{% endblock %}
+{% block content %}
+<div class="session-page auth-page">
+  <div class="auth-card">
+    <h2 class="auth-title">登录羽转</h2>
+    <p class="auth-subtitle">管理俱乐部活动、排阵与计分</p>
+    <form method="post" class="auth-form">
+      {% csrf_token %}
+      {% if next_url %}
+      <input type="hidden" name="next" value="{{ next_url }}">
+      {% endif %}
+      {% if form.non_field_errors %}
+      <div class="alert alert-danger py-2">{{ form.non_field_errors.0 }}</div>
+      {% endif %}
+      {% for field in form %}
+      <div class="mb-3">
+        <label class="form-label">{{ field.label }}</label>
+        {{ field }}
+        {% if field.errors %}
+        <div class="text-danger small">{{ field.errors.0 }}</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+      <button type="submit" class="btn btn-primary btn-lg w-100 auth-submit">登录</button>
+    </form>
+    <p class="auth-switch">还没有账号？<a href="{% url 'register' %}">立即注册</a></p>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,68 @@
+<div id="leaderboardPoster" class="leaderboard-poster" aria-hidden="true">
+  <div class="poster-shell">
+    <div class="poster-header">
+      <div class="poster-badge">羽转</div>
+      <h1 class="poster-title">{{ session.title }}</h1>
+      <p class="poster-meta">{{ session.event_time_label }}</p>
+      {% if session.location %}
+      <p class="poster-location">📍 {{ session.location }}</p>
+      {% endif %}
+    </div>
+
+    {% if leaderboard|length >= 1 %}
+    <div class="poster-podium">
+      {% for row in leaderboard %}
+      <div class="poster-podium-item poster-podium-{{ row.rank }}"
+           data-player-id="{{ row.player.pk }}"
+           {% if row.rank > 3 %}style="display:none"{% endif %}>
+        <div class="poster-podium-rank">
+          {% if row.rank == 1 %}🥇{% elif row.rank == 2 %}🥈{% else %}🥉{% endif %}
+        </div>
+        {% if row.player.avatar %}
+        <img src="{{ row.player.avatar.url }}" alt="" class="poster-podium-avatar">
+        {% else %}
+        <span class="poster-podium-avatar poster-podium-avatar-letter">{{ row.player.display_name|slice:":1" }}</span>
+        {% endif %}
+        <div class="poster-podium-name">{{ row.player.display_name }}</div>
+        <div class="poster-podium-stats">
+          <span class="wl-win">{{ row.wins }}</span>-<span class="wl-loss">{{ row.losses }}</span>
+          · 胜分 {{ row.point_diff }}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="poster-card">
+      <div class="poster-table-head">
+        <span class="poster-col-rank">排名</span>
+        <span class="poster-col-name">球员</span>
+        <span class="poster-col-wl">胜局</span>
+        <span class="poster-col-pts">胜分</span>
+      </div>
+      <div class="poster-rows">
+        {% for row in leaderboard %}
+        <div class="poster-row{% if row.rank <= 3 %} poster-row-top-{{ row.rank }}{% endif %}"
+             data-player-id="{{ row.player.pk }}"
+             {% if row.rank <= 3 and leaderboard|length > 3 %}style="display:none"{% endif %}>
+          <span class="poster-col-rank">
+            {% if row.rank == 1 %}🥇{% elif row.rank == 2 %}🥈{% elif row.rank == 3 %}🥉{% else %}{{ row.rank }}{% endif %}
+          </span>
+          <span class="poster-col-name">
+            {% if row.player.avatar %}
+            <img src="{{ row.player.avatar.url }}" alt="" class="poster-avatar">
+            {% else %}
+            <span class="poster-avatar poster-avatar-letter">{{ row.player.display_name|slice:":1" }}</span>
+            {% endif %}
+            <span class="poster-player-name">{{ row.player.display_name }}</span>
+          </span>
+          <span class="poster-col-wl"><span class="wl-win">{{ row.wins }}</span>-<span class="wl-loss">{{ row.losses }}</span></span>
+          <span class="poster-col-pts">{{ row.point_diff }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="poster-footer">羽转 · 多人轮转赛成绩</div>
+  </div>
+</div>

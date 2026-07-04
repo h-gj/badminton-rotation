@@ -1,16 +1,22 @@
 {% extends 'rotation/base.html' %}
 {% block title %}对局计分 - {{ session.title }}{% endblock %}
 {% block content %}
-<div class="session-page">
+<div class="session-page session-matches-page" data-csrf="{{ csrf_token }}"
+     data-can-score="{% if can_score %}1{% else %}0{% endif %}">
   {% include 'rotation/includes/session_tabs.html' with active_tab='matches' %}
 
   <div class="session-info-card">
     <div class="session-info-title">{{ session.title }}</div>
     {% include 'rotation/includes/session_progress.html' %}
+    {% if not session.scores_editable %}
+    <div class="match-scores-locked-note">比赛已结束，比分已锁定</div>
+    {% elif not user.is_authenticated %}
+    <div class="match-scores-login-note">登录后可录入比分 · <a href="{% url 'login' %}?next={% url 'session_matches' session.pk %}">去登录</a></div>
+    {% endif %}
   </div>
 
   {% for m in flat_matches %}
-  <div class="match-card">
+  <div class="match-card" id="match-{{ m.pk }}">
     <div class="match-card-side">
       <span class="match-card-num">{{ m.match_number }}</span>
       {% if m.is_completed %}
@@ -21,59 +27,117 @@
     </div>
     <div class="match-card-body">
       <div class="match-teams">
-        <div class="match-team">
+        <div class="match-team match-team--home">
           <div class="match-team-players">
             <div class="match-player">
               {% include 'rotation/includes/player_avatar.html' with player=m.team1_player1 size='sm' %}
-              {{ m.team1_player1.display_name }}
+              <span class="match-player-name" title="{{ m.team1_player1.display_name }}">{{ m.team1_player1.display_name }}</span>
             </div>
             <div class="match-player">
               {% include 'rotation/includes/player_avatar.html' with player=m.team1_player2 size='sm' %}
-              {{ m.team1_player2.display_name }}
+              <span class="match-player-name" title="{{ m.team1_player2.display_name }}">{{ m.team1_player2.display_name }}</span>
             </div>
           </div>
         </div>
 
-        <div class="match-score-box">
-          <form method="post" action="{% url 'match_score' m.pk %}" class="match-score-form">
+        <div class="match-score-box"
+             data-completed="{% if m.is_completed %}1{% else %}0{% endif %}"
+             data-action="{% url 'match_score' m.pk %}"
+             data-t1p1="{{ m.team1_player1.display_name }}"
+             data-t1p2="{{ m.team1_player2.display_name }}"
+             data-t2p1="{{ m.team2_player1.display_name }}"
+             data-t2p2="{{ m.team2_player2.display_name }}">
+          {% if not can_score %}
+          <div class="match-score-readonly">
+            {% if m.is_completed %}
+            <div class="match-score-readonly-nums">
+              <span class="score-num">{{ m.score_team1 }}</span>
+              <span class="match-score-readonly-sep">:</span>
+              <span class="score-num">{{ m.score_team2 }}</span>
+            </div>
+            <div class="match-diff">净胜 {{ m.score_diff }}</div>
+            {% else %}
+            <div class="match-score-unset">未录入</div>
+            {% endif %}
+          </div>
+          {% elif m.is_completed %}
+          <div class="match-score-inputs match-score-completed">
+            <button type="button" class="match-score-open"
+                    data-bs-toggle="modal" data-bs-target="#scoreModal"
+                    data-action="{% url 'match_score' m.pk %}"
+                    data-s1="{{ m.score_team1 }}"
+                    data-s2="{{ m.score_team2 }}"
+                    data-t1p1="{{ m.team1_player1.display_name }}"
+                    data-t1p2="{{ m.team1_player2.display_name }}"
+                    data-t2p1="{{ m.team2_player1.display_name }}"
+                    data-t2p2="{{ m.team2_player2.display_name }}"
+                    title="修改比分">
+              <span class="score-num">{{ m.score_team1 }}</span>
+            </button>
+            <button type="button" class="match-score-swap card-score-swap"
+                    data-s1="{{ m.score_team1 }}" data-s2="{{ m.score_team2 }}"
+                    title="对调比分">⇄</button>
+            <button type="button" class="match-score-open"
+                    data-bs-toggle="modal" data-bs-target="#scoreModal"
+                    data-action="{% url 'match_score' m.pk %}"
+                    data-s1="{{ m.score_team1 }}"
+                    data-s2="{{ m.score_team2 }}"
+                    data-t1p1="{{ m.team1_player1.display_name }}"
+                    data-t1p2="{{ m.team1_player2.display_name }}"
+                    data-t2p1="{{ m.team2_player1.display_name }}"
+                    data-t2p2="{{ m.team2_player2.display_name }}"
+                    title="修改比分">
+              <span class="score-num">{{ m.score_team2 }}</span>
+            </button>
+          </div>
+          <div class="match-diff">净胜 {{ m.score_diff }}</div>
+          {% else %}
+          <form method="post" action="{% url 'match_score' m.pk %}" class="match-score-form match-score-inline-form">
             {% csrf_token %}
             <div class="match-score-inputs">
               <input type="number" name="score_team1" min="0" max="30"
                      value="{% if m.score_team1 is not None %}{{ m.score_team1 }}{% endif %}"
-                     class="form-control match-score-input" placeholder="0">
-              <button type="button" class="match-score-swap" title="对调比分">⇄</button>
+                     class="form-control match-score-input" placeholder="0" inputmode="numeric">
+              <button type="button" class="match-score-swap inline-score-swap" title="对调比分">⇄</button>
               <input type="number" name="score_team2" min="0" max="30"
                      value="{% if m.score_team2 is not None %}{{ m.score_team2 }}{% endif %}"
-                     class="form-control match-score-input" placeholder="0">
+                     class="form-control match-score-input" placeholder="0" inputmode="numeric">
             </div>
-            <div class="match-score-quick">
-              <button type="button" class="score-quick-btn" data-s1="19" data-s2="21">19:21</button>
-              <button type="button" class="score-quick-btn" data-s1="18" data-s2="21">18:21</button>
-              <button type="button" class="score-quick-btn" data-s1="17" data-s2="21">17:21</button>
-              <button type="button" class="score-quick-btn" data-s1="16" data-s2="21">16:21</button>
-            </div>
-            {% if m.is_completed %}
-            <div class="match-diff">净胜 {{ m.score_diff }}</div>
-            {% endif %}
           </form>
+          {% endif %}
         </div>
 
-        <div class="match-team">
+        <div class="match-team match-team--away">
           <div class="match-team-players">
             <div class="match-player">
               {% include 'rotation/includes/player_avatar.html' with player=m.team2_player1 size='sm' %}
-              {{ m.team2_player1.display_name }}
+              <span class="match-player-name" title="{{ m.team2_player1.display_name }}">{{ m.team2_player1.display_name }}</span>
             </div>
             <div class="match-player">
               {% include 'rotation/includes/player_avatar.html' with player=m.team2_player2 size='sm' %}
-              {{ m.team2_player2.display_name }}
+              <span class="match-player-name" title="{{ m.team2_player2.display_name }}">{{ m.team2_player2.display_name }}</span>
             </div>
           </div>
         </div>
       </div>
 
       <div class="match-meta">
-        <span>第 {{ m.round_number }} 轮 · 场地 {{ m.court_number }}</span>
+        <div class="match-meta-main">
+          <span class="match-meta-label">第 {{ m.round_number }} 轮 · 场地 {{ m.court_number }}</span>
+          {% if can_score %}
+          <div class="match-score-quick">
+            <button type="button" class="score-quick-btn" data-s1="19" data-s2="21">19:21</button>
+            <button type="button" class="score-quick-btn" data-s1="18" data-s2="21">18:21</button>
+            <button type="button" class="score-quick-btn" data-s1="17" data-s2="21">17:21</button>
+            <button type="button" class="score-quick-btn" data-s1="16" data-s2="21">16:21</button>
+          </div>
+          {% endif %}
+        </div>
+        {% if m.is_completed and m.scored_by_display %}
+        <div class="match-meta-scorer">
+          录入：{{ m.scored_by_display }}{% if m.scored_at %} · {{ m.scored_at|date:"m-d H:i" }}{% endif %}
+        </div>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -83,30 +147,410 @@
     <a href="{% url 'session_detail' session.pk %}" class="btn btn-primary btn-sm">返回报名页生成对阵</a>
   </div>
   {% endfor %}
+</div>
 
-  {% if flat_matches %}
-  <div class="session-action-bar">
-    <a href="{% url 'session_leaderboard' session.pk %}" class="btn btn-primary">查看成绩</a>
+{% include 'rotation/includes/matches_poster.html' %}
+
+{% if flat_matches %}
+<div class="session-bottom-bar">
+  <div class="session-bottom-actions session-bottom-actions-split">
+    <button type="button" class="btn btn-outline-primary btn-lg session-matches-action-btn" id="saveMatchesPosterBtn"
+            data-filename="badminton-{{ session.pk }}-matches.png">
+      分享对阵图
+    </button>
+    <a href="{% url 'session_leaderboard' session.pk %}" class="btn btn-primary btn-lg session-matches-action-btn">查看成绩</a>
   </div>
-  {% endif %}
+</div>
+{% endif %}
+
+<div class="modal fade score-modal" id="scoreModal" tabindex="-1" aria-labelledby="scoreModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="scoreModalLabel">填写比分</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+      </div>
+      <div class="modal-body">
+        <form method="post" action="" id="scoreModalForm">
+          {% csrf_token %}
+          <div class="score-modal-teams">
+            <div class="score-modal-team" id="scoreModalTeam1">
+              <div class="score-modal-player">
+                <span class="player-avatar player-avatar-sm" id="scoreModalT1P1Avatar"></span>
+                <span class="score-modal-player-name" id="scoreModalT1P1Name"></span>
+              </div>
+              <div class="score-modal-player">
+                <span class="player-avatar player-avatar-sm" id="scoreModalT1P2Avatar"></span>
+                <span class="score-modal-player-name" id="scoreModalT1P2Name"></span>
+              </div>
+            </div>
+            <div class="score-modal-pk">PK</div>
+            <div class="score-modal-team" id="scoreModalTeam2">
+              <div class="score-modal-player">
+                <span class="player-avatar player-avatar-sm" id="scoreModalT2P1Avatar"></span>
+                <span class="score-modal-player-name" id="scoreModalT2P1Name"></span>
+              </div>
+              <div class="score-modal-player">
+                <span class="player-avatar player-avatar-sm" id="scoreModalT2P2Avatar"></span>
+                <span class="score-modal-player-name" id="scoreModalT2P2Name"></span>
+              </div>
+            </div>
+          </div>
+          <div class="score-modal-inputs">
+            <input type="number" name="score_team1" min="0" max="30"
+                   class="form-control score-modal-input" id="scoreModalS1" placeholder="0">
+            <span class="score-modal-colon">:</span>
+            <input type="number" name="score_team2" min="0" max="30"
+                   class="form-control score-modal-input" id="scoreModalS2" placeholder="0">
+          </div>
+          <button type="button" class="score-modal-swap" id="scoreModalSwap" title="对调比分">⇄ 对调比分</button>
+          <button type="submit" class="btn btn-primary score-modal-submit">确认填写</button>
+        </form>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
-function canSubmitScore(form) {
-  var s1 = form.querySelector('[name=score_team1]').value;
-  var s2 = form.querySelector('[name=score_team2]').value;
+var CONFIRM_MODIFY_MSG = '是否确定修改比分？';
+var CAN_SCORE = document.querySelector('.session-matches-page')?.dataset.canScore === '1';
+
+function getCsrfToken() {
+  var page = document.querySelector('.session-matches-page');
+  if (page && page.dataset.csrf) {
+    return page.dataset.csrf;
+  }
+  var input = document.querySelector('[name=csrfmiddlewaretoken]');
+  if (input && input.value) {
+    return input.value;
+  }
+  var match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : '';
+}
+
+function firstChar(name) {
+  return name ? name.slice(0, 1) : '?';
+}
+
+function canSubmitScore(s1, s2) {
   return s1 !== '' && s2 !== '';
 }
 
-function submitScoreForm(form) {
-  if (canSubmitScore(form)) {
-    form.submit();
+function confirmIfCompleted(isCompleted, action) {
+  if (isCompleted && !confirm(CONFIRM_MODIFY_MSG)) {
+    return;
+  }
+  action();
+}
+
+function updateSessionProgress(completedCount, matchCount) {
+  var countEl = document.getElementById('sessionProgressCount');
+  var fillEl = document.getElementById('sessionProgressFill');
+  if (countEl) {
+    countEl.textContent = completedCount + '/' + matchCount + ' 场';
+  }
+  if (fillEl && matchCount > 0) {
+    fillEl.style.width = Math.round(completedCount / matchCount * 100) + '%';
   }
 }
 
-document.querySelectorAll('.match-score-swap').forEach(function (btn) {
+function openBtnAttrs(box, s1, s2) {
+  return ' data-action="' + box.dataset.action + '"' +
+    ' data-s1="' + s1 + '" data-s2="' + s2 + '"' +
+    ' data-t1p1="' + box.dataset.t1p1 + '"' +
+    ' data-t1p2="' + box.dataset.t1p2 + '"' +
+    ' data-t2p1="' + box.dataset.t2p1 + '"' +
+    ' data-t2p2="' + box.dataset.t2p2 + '"';
+}
+
+function applyScoreSaved(box, data) {
+  var s1 = data.score_team1;
+  var s2 = data.score_team2;
+  box.dataset.completed = '1';
+
+  var inlineForm = box.querySelector('.match-score-inline-form');
+  if (inlineForm) {
+    inlineForm.remove();
+  }
+
+  var completed = box.querySelector('.match-score-completed');
+  if (!completed) {
+    completed = document.createElement('div');
+    completed.className = 'match-score-inputs match-score-completed';
+    completed.innerHTML =
+      '<button type="button" class="match-score-open" data-bs-toggle="modal" data-bs-target="#scoreModal"' +
+        openBtnAttrs(box, s1, s2) + ' title="修改比分"><span class="score-num">' + s1 + '</span></button>' +
+      '<button type="button" class="match-score-swap card-score-swap" data-s1="' + s1 + '" data-s2="' + s2 + '" title="对调比分">⇄</button>' +
+      '<button type="button" class="match-score-open" data-bs-toggle="modal" data-bs-target="#scoreModal"' +
+        openBtnAttrs(box, s1, s2) + ' title="修改比分"><span class="score-num">' + s2 + '</span></button>';
+    box.insertBefore(completed, box.firstChild);
+  } else {
+    completed.querySelectorAll('.score-num')[0].textContent = s1;
+    completed.querySelectorAll('.score-num')[1].textContent = s2;
+    completed.querySelectorAll('.match-score-open').forEach(function (btn) {
+      btn.dataset.s1 = s1;
+      btn.dataset.s2 = s2;
+    });
+    var swapBtn = box.querySelector('.card-score-swap');
+    if (swapBtn) {
+      swapBtn.dataset.s1 = s1;
+      swapBtn.dataset.s2 = s2;
+    }
+  }
+
+  var diffEl = box.querySelector('.match-diff');
+  if (!diffEl) {
+    diffEl = document.createElement('div');
+    diffEl.className = 'match-diff';
+    box.appendChild(diffEl);
+  }
+  diffEl.textContent = '净胜 ' + data.score_diff;
+
+  var card = box.closest('.match-card');
+  if (card) {
+    var check = card.querySelector('.match-card-check');
+    if (check) {
+      check.textContent = '✓';
+      check.classList.remove('pending');
+    }
+    if (data.scored_by_display) {
+      var meta = card.querySelector('.match-meta');
+      if (meta) {
+        var scorerEl = meta.querySelector('.match-meta-scorer');
+        var scorerText = '录入：' + data.scored_by_display;
+        if (data.scored_at_label) {
+          scorerText += ' · ' + data.scored_at_label;
+        }
+        if (!scorerEl) {
+          scorerEl = document.createElement('div');
+          scorerEl.className = 'match-meta-scorer';
+          meta.appendChild(scorerEl);
+        }
+        scorerEl.textContent = scorerText;
+      }
+    }
+  }
+}
+
+function saveMatchScore(box, s1, s2, onSuccess) {
+  if (!CAN_SCORE) {
+    return Promise.resolve();
+  }
+  var actionUrl = box.dataset.action;
+  if (!actionUrl || !canSubmitScore(String(s1), String(s2))) {
+    return Promise.resolve();
+  }
+  var body = new FormData();
+  body.append('score_team1', s1);
+  body.append('score_team2', s2);
+  var csrf = getCsrfToken();
+  if (csrf) {
+    body.append('csrfmiddlewaretoken', csrf);
+  }
+
+  return fetch(actionUrl, {
+    method: 'POST',
+    headers: {
+      'X-Requested-With': 'XMLHttpRequest',
+      'X-CSRFToken': csrf,
+    },
+    body: body,
+    credentials: 'same-origin',
+  }).then(function (resp) {
+    if (resp.status === 401) {
+      return resp.json().then(function (data) {
+        if (data.login_url) {
+          window.location.href = data.login_url;
+        }
+      }).catch(function () {
+        window.location.href = '{% url "login" %}?next=' + encodeURIComponent(window.location.pathname);
+      });
+    }
+    if (resp.status === 403) {
+      return resp.json().then(function (data) {
+        var msg = (data.errors && data.errors.length) ? data.errors.join('；') : '请求被拒绝，请刷新页面后重试';
+        alert(msg);
+      }).catch(function () {
+        alert('CSRF 验证失败，请刷新页面后重试');
+      });
+    }
+    return resp.json().then(function (data) {
+      if (!resp.ok || !data.ok) {
+        var msg = (data.errors && data.errors.length) ? data.errors.join('；') : '比分无效';
+        alert(msg);
+        return;
+      }
+      applyScoreSaved(box, data);
+      updateSessionProgress(data.completed_count, data.match_count);
+      if (onSuccess) {
+        onSuccess(data);
+      }
+    });
+  }).catch(function () {
+    alert('保存失败，请检查网络后重试');
+  });
+}
+
+function submitQuickForm(box, s1, s2) {
+  saveMatchScore(box, s1, s2);
+}
+
+function submitScoreForm(form) {
+  var box = form.closest('.match-score-box');
+  var s1 = form.querySelector('[name=score_team1]').value;
+  var s2 = form.querySelector('[name=score_team2]').value;
+  if (canSubmitScore(s1, s2)) {
+    saveMatchScore(box, s1, s2);
+  }
+}
+
+function shouldSkipInlineBlurSubmit(form) {
+  var active = document.activeElement;
+  if (!active) {
+    return false;
+  }
+  if (form.contains(active)) {
+    return true;
+  }
+  var card = form.closest('.match-card');
+  if (!card || !active.closest) {
+    return false;
+  }
+  return card.contains(active) && (
+    active.classList.contains('match-score-swap') ||
+    active.classList.contains('score-quick-btn') ||
+    active.classList.contains('match-score-open')
+  );
+}
+
+function tryAutoSaveInlineForm(form) {
+  if (shouldSkipInlineBlurSubmit(form)) {
+    return;
+  }
+  submitScoreForm(form);
+}
+
+function autoFillOtherScore(changedInput, otherInput) {
+  if (changedInput.value === '') {
+    return;
+  }
+  var val = parseInt(changedInput.value, 10);
+  if (isNaN(val)) {
+    return;
+  }
+  if (val <= 19) {
+    otherInput.value = 21;
+  } else if (val === 20) {
+    otherInput.value = 22;
+  }
+}
+
+var autoFillTimers = new WeakMap();
+
+function scheduleAutoFill(changedInput, otherInput) {
+  var prev = autoFillTimers.get(changedInput);
+  if (prev) {
+    clearTimeout(prev);
+  }
+  autoFillTimers.set(changedInput, setTimeout(function () {
+    autoFillOtherScore(changedInput, otherInput);
+  }, 500));
+}
+
+function flushAutoFill(changedInput, otherInput) {
+  var prev = autoFillTimers.get(changedInput);
+  if (prev) {
+    clearTimeout(prev);
+    autoFillTimers.delete(changedInput);
+  }
+  autoFillOtherScore(changedInput, otherInput);
+}
+
+var scoreModal = document.getElementById('scoreModal');
+var scoreModalForm = document.getElementById('scoreModalForm');
+var scoreModalS1 = document.getElementById('scoreModalS1');
+var scoreModalS2 = document.getElementById('scoreModalS2');
+var modalEditingCompleted = false;
+var modalTargetBox = null;
+
+function setModalPlayer(prefix, name) {
+  document.getElementById(prefix + 'Avatar').textContent = firstChar(name);
+  var nameEl = document.getElementById(prefix + 'Name');
+  nameEl.textContent = name;
+  nameEl.title = name || '';
+}
+
+scoreModal.addEventListener('show.bs.modal', function (event) {
+  var trigger = event.relatedTarget;
+  modalTargetBox = trigger.closest('.match-score-box');
+  modalEditingCompleted = modalTargetBox && modalTargetBox.dataset.completed === '1';
+  scoreModalForm.action = trigger.dataset.action;
+  scoreModalS1.value = trigger.dataset.s1 || '';
+  scoreModalS2.value = trigger.dataset.s2 || '';
+  setModalPlayer('scoreModalT1P1', trigger.dataset.t1p1);
+  setModalPlayer('scoreModalT1P2', trigger.dataset.t1p2);
+  setModalPlayer('scoreModalT2P1', trigger.dataset.t2p1);
+  setModalPlayer('scoreModalT2P2', trigger.dataset.t2p2);
+  document.getElementById('scoreModalLabel').textContent = modalEditingCompleted ? '修改比分' : '填写比分';
+  setTimeout(function () {
+    scoreModalS1.focus();
+    scoreModalS1.select();
+  }, 300);
+});
+
+document.querySelector('.session-matches-page').addEventListener('click', function (e) {
+  var openBtn = e.target.closest('.match-score-open');
+  if (openBtn) {
+    var box = openBtn.closest('.match-score-box');
+    if (box && box.dataset.completed === '1' && !confirm(CONFIRM_MODIFY_MSG)) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }
+    return;
+  }
+  var swapBtn = e.target.closest('.card-score-swap');
+  if (swapBtn) {
+    var scoreBox = swapBtn.closest('.match-score-box');
+    confirmIfCompleted(true, function () {
+      submitQuickForm(scoreBox, swapBtn.dataset.s2, swapBtn.dataset.s1);
+    });
+  }
+}, true);
+
+document.getElementById('scoreModalSwap').addEventListener('click', function () {
+  confirmIfCompleted(modalEditingCompleted, function () {
+    var tmp = scoreModalS1.value;
+    scoreModalS1.value = scoreModalS2.value;
+    scoreModalS2.value = tmp;
+  });
+});
+
+[scoreModalS1, scoreModalS2].forEach(function (input) {
+  var other = input === scoreModalS1 ? scoreModalS2 : scoreModalS1;
+  input.addEventListener('input', function () {
+    scheduleAutoFill(input, other);
+  });
+  input.addEventListener('change', function () {
+    flushAutoFill(input, other);
+  });
+  input.addEventListener('blur', function () {
+    flushAutoFill(input, other);
+  });
+});
+
+scoreModalForm.addEventListener('submit', function (e) {
+  e.preventDefault();
+  if (!canSubmitScore(scoreModalS1.value, scoreModalS2.value) || !modalTargetBox) {
+    return;
+  }
+  saveMatchScore(modalTargetBox, scoreModalS1.value, scoreModalS2.value, function () {
+    bootstrap.Modal.getInstance(scoreModal).hide();
+  });
+});
+
+document.querySelectorAll('.inline-score-swap').forEach(function (btn) {
   btn.addEventListener('click', function () {
-    var form = btn.closest('.match-score-form');
+    var form = btn.closest('.match-score-inline-form');
     var s1 = form.querySelector('[name=score_team1]');
     var s2 = form.querySelector('[name=score_team2]');
     var tmp = s1.value;
@@ -116,77 +560,70 @@ document.querySelectorAll('.match-score-swap').forEach(function (btn) {
   });
 });
 
-document.querySelectorAll('.score-quick-btn').forEach(function (btn) {
+document.querySelectorAll('.match-score-quick .score-quick-btn').forEach(function (btn) {
   btn.addEventListener('mousedown', function (e) {
     e.preventDefault();
   });
   btn.addEventListener('click', function () {
-    var form = btn.closest('.match-score-form');
-    form.querySelector('[name=score_team1]').value = btn.dataset.s1;
-    form.querySelector('[name=score_team2]').value = btn.dataset.s2;
-    form.submit();
+    var card = btn.closest('.match-card');
+    var box = card ? card.querySelector('.match-score-box') : null;
+    if (!box) {
+      return;
+    }
+    var isCompleted = box.dataset.completed === '1';
+    confirmIfCompleted(isCompleted, function () {
+      submitQuickForm(box, btn.dataset.s1, btn.dataset.s2);
+    });
   });
 });
 
-function autoFillOtherScore(changedInput) {
-  if (changedInput.value === '') {
-    return;
-  }
-  var val = parseInt(changedInput.value, 10);
-  if (isNaN(val)) {
-    return;
-  }
+document.querySelectorAll('.match-score-inline-form').forEach(function (form) {
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    submitScoreForm(form);
+  });
+});
 
-  var form = changedInput.closest('.match-score-form');
-  var other = changedInput.name === 'score_team1'
+document.querySelectorAll('.match-score-inline-form .match-score-input').forEach(function (input) {
+  var form = input.closest('.match-score-inline-form');
+  var other = input.name === 'score_team1'
     ? form.querySelector('[name=score_team2]')
     : form.querySelector('[name=score_team1]');
-
-  if (val <= 19) {
-    other.value = 21;
-  } else if (val === 20) {
-    other.value = 22;
-  }
-}
-
-var autoFillTimers = new WeakMap();
-
-function scheduleAutoFill(input) {
-  var prev = autoFillTimers.get(input);
-  if (prev) {
-    clearTimeout(prev);
-  }
-  autoFillTimers.set(input, setTimeout(function () {
-    autoFillOtherScore(input);
-  }, 500));
-}
-
-function flushAutoFill(input) {
-  var prev = autoFillTimers.get(input);
-  if (prev) {
-    clearTimeout(prev);
-    autoFillTimers.delete(input);
-  }
-  autoFillOtherScore(input);
-}
-
-document.querySelectorAll('.match-score-input').forEach(function (input) {
   input.addEventListener('input', function () {
-    scheduleAutoFill(input);
+    scheduleAutoFill(input, other);
   });
   input.addEventListener('change', function () {
-    flushAutoFill(input);
+    flushAutoFill(input, other);
   });
   input.addEventListener('blur', function () {
-    flushAutoFill(input);
+    flushAutoFill(input, other);
+    setTimeout(function () {
+      tryAutoSaveInlineForm(form);
+    }, 120);
   });
   input.addEventListener('keydown', function (e) {
     if (e.key === 'Enter') {
       e.preventDefault();
-      flushAutoFill(input);
-      submitScoreForm(input.closest('.match-score-form'));
+      flushAutoFill(input, other);
+      submitScoreForm(form);
     }
   });
 });
+</script>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+{% include 'rotation/includes/poster_save_script.html' %}
+<script>
+PosterSave.bind(
+  document.getElementById('saveMatchesPosterBtn'),
+  document.getElementById('matchesPoster'),
+  {
+    label: '分享对阵图',
+    title: '对阵表',
+    failMsg: '对阵图生成失败，请重试',
+  }
+);
 </script>
 {% endblock %}

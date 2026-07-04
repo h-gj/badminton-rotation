@@ -1,62 +1,353 @@
 {% extends 'rotation/base.html' %}
-{% block title %}{{ session.title }} - 羽毛球轮转{% endblock %}
+{% block title %}{{ session.title }} - 羽转{% endblock %}
 {% block content %}
-<div class="session-page">
+<div class="session-page session-detail-page">
   {% include 'rotation/includes/session_tabs.html' with active_tab='info' %}
 
   <div class="session-info-card">
     <div class="session-info-title">{{ session.title }}</div>
-    <div class="session-info-row">
+    <div class="session-info-row session-info-link">
       <span class="session-info-icon">🏸</span>
-      <span>多人轮转赛 · {{ session.reg_count }} 人</span>
+      <span class="flex-fill">多人轮转赛</span>
+      <span class="session-info-chevron">›</span>
     </div>
     <div class="session-info-row">
+      <span class="session-info-icon">🏢</span>
+      <span class="flex-fill">{{ session.club.name }}</span>
+    </div>
+    <button type="button" class="session-info-row-btn" data-bs-toggle="modal" data-bs-target="#timeModal">
       <span class="session-info-icon">🕐</span>
-      <span>{{ session.event_date|date:"Y-m-d H:i" }}</span>
-    </div>
-    <div class="session-info-row">
+      <span class="flex-fill">{{ session.event_time_label }}</span>
+      <span class="session-info-chevron">›</span>
+    </button>
+    <button type="button" class="session-info-row-btn" data-bs-toggle="modal" data-bs-target="#locationModal">
       <span class="session-info-icon">📍</span>
-      <span>{{ session.location|default:"未填场地" }}</span>
-    </div>
-    <div class="session-info-row">
-      <span class="session-info-icon">📋</span>
-      <span>
-        <span class="badge badge-status-{{ session.status }}">{{ session.get_status_display }}</span>
-        {% if match_count %} · {{ completed_count }}/{{ match_count }} 场已录分{% endif %}
+      <span class="flex-fill {% if not session.location %}text-muted{% endif %}">
+        {{ session.location|default:"添加比赛地点" }}
       </span>
-    </div>
+      <span class="session-info-chevron">›</span>
+    </button>
   </div>
 
-  <div class="reg-list-card">
+  <div class="reg-list-card" id="registrationSection">
     <div class="reg-list-header">
       <span>报名名单</span>
-      <span class="reg-list-count">{{ session.reg_count }}/{{ session.max_players }}
-        <span class="badge badge-status-{{ session.status }} ms-1">{{ session.get_status_display }}</span>
+      <span class="reg-list-count">
+        <span class="badge badge-status-{{ session.status }}">{{ session.get_status_display }}</span>
       </span>
     </div>
     {% for reg in registrations %}
     <div class="reg-item">
       <span class="reg-item-num">{{ forloop.counter }}</span>
-      {% include 'rotation/includes/player_avatar.html' with player=reg.player size='md' %}
+      {% include 'rotation/includes/player_avatar.html' with player=reg.player size='md' clickable=True %}
       <span class="reg-item-name">{{ reg.player.display_name }}</span>
     </div>
     {% empty %}
-    <div class="text-center text-muted py-4 small">暂无报名，至少需要 4 人才能生成对阵</div>
+    <div class="text-center text-muted py-3 small">暂无报名，在下方选择或输入人员</div>
     {% endfor %}
-  </div>
 
-  <div class="session-action-bar">
-    {% if session.status == 'open' %}
-    <a href="{% url 'session_register' session.pk %}" class="btn btn-outline-primary btn-sm">添加报名</a>
-    {% endif %}
-    {% if session.can_generate %}
-    <form method="post" action="{% url 'session_generate' session.pk %}" class="flex-fill d-flex">
-      {% csrf_token %}
-      <button class="btn btn-primary btn-sm w-100">生成对阵</button>
-    </form>
-    {% elif match_count %}
-    <a href="{% url 'session_matches' session.pk %}" class="btn btn-primary btn-sm">查看对阵</a>
+    {% if session.status == 'open' and session.reg_count < session.max_players %}
+    <div class="reg-add-section" id="add-players">
+      <form method="post" action="{% url 'session_add_players' session.pk %}">
+        {% csrf_token %}
+        <div class="reg-add-title">添加报名</div>
+        {% if previous_players %}
+        <input type="search" class="form-control form-control-sm player-search" id="playerSearch"
+               placeholder="搜索姓名或昵称..." autocomplete="off">
+        <div class="player-picker" id="playerPicker">
+          {% for player in previous_players %}
+          <label class="player-picker-item"
+                 data-name="{{ player.name|lower }} {{ player.nickname|lower }} {{ player.display_name|lower }}">
+            <input type="checkbox" name="players" value="{{ player.pk }}"
+                   {% if player.pk in add_players_form.selected_player_pks %}checked{% endif %}>
+            <span>{{ player.display_name }}</span>
+            <span class="player-picker-count">{{ player.session_count }}次</span>
+          </label>
+          {% endfor %}
+          <div class="player-picker-no-match" id="playerPickerNoMatch">没有匹配的人员</div>
+        </div>
+        <!-- <div class="form-text mb-2">仅显示本俱乐部球员，按参与活动次数排序，可多选</div> -->
+        {% else %}
+        <div class="player-picker-empty mb-2">暂无历史报名人员，可在下方手动输入</div>
+        {% endif %}
+        <label class="form-label small mb-1">{{ add_players_form.players_manual.label }}</label>
+        {{ add_players_form.players_manual }}
+        <div class="form-text mb-2">手动输入新人员，多人请用空格、换行或逗号分隔；不在本俱乐部时将自动创建账号（用户名 {{ session.club.invite_code|lower }}_姓名拼音，默认密码 666666）</div>
+        <button type="submit" class="btn btn-outline-primary btn-lg w-100 reg-add-submit-btn">确认添加</button>
+      </form>
+    </div>
     {% endif %}
   </div>
 </div>
+
+<div class="session-bottom-bar">
+  <div class="session-bottom-note">
+    注：此比赛不收费，仅报名排阵使用
+  </div>
+  <div class="session-bottom-actions">
+    {% if session.status == 'open' %}
+    {% if match_count %}
+    <a href="{% url 'session_matches' session.pk %}" class="btn btn-primary btn-lg session-bottom-main-btn w-100">查看对阵</a>
+    {% else %}
+    <form method="post" action="{% url 'session_generate' session.pk %}" class="session-bottom-main-btn w-100" id="generateForm">
+      {% csrf_token %}
+      <input type="hidden" name="rounds" id="id_generate_rounds" value="{{ default_rounds }}">
+      <input type="hidden" name="avoid_mixed_gender_doubles" id="id_generate_avoid"
+             value="{% if session.avoid_mixed_gender_doubles %}1{% else %}0{% endif %}">
+      <button type="submit" class="btn btn-primary btn-lg w-100 session-generate-btn" {% if not session.can_generate %}disabled{% endif %}>生成对阵</button>
+    </form>
+    {% endif %}
+    {% elif match_count %}
+    <a href="{% url 'session_matches' session.pk %}" class="btn btn-primary btn-lg session-bottom-main-btn w-100">查看对阵</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="modal fade" id="timeModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">设置比赛时间</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{% url 'session_update_meta' session.pk %}">
+        {% csrf_token %}
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">{{ meta_form.event_date.label }}</label>
+            <input type="date" name="event_date" class="form-control"
+                   value="{{ meta_initial.event_date|date:'Y-m-d' }}" required>
+          </div>
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label">{{ meta_form.event_start_time.label }}</label>
+              <input type="time" name="event_start_time" class="form-control"
+                     value="{{ meta_initial.event_start_time|time:'H:i' }}" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label">{{ meta_form.event_end_time.label }}</label>
+              <input type="time" name="event_end_time" class="form-control"
+                     value="{% if meta_initial.event_end_time %}{{ meta_initial.event_end_time|time:'H:i' }}{% endif %}">
+              <div class="form-text">留空则按创建当天截止录入比分</div>
+            </div>
+          </div>
+          <input type="hidden" name="location" value="{{ session.location }}">
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">取消</button>
+          <button type="submit" class="btn btn-primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="locationModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">设置比赛地点</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{% url 'session_update_meta' session.pk %}">
+        {% csrf_token %}
+        <div class="modal-body">
+          <label class="form-label">{{ meta_form.location.label }}</label>
+          <input type="text" name="location" class="form-control"
+                 value="{{ session.location }}" placeholder="例如：XX羽毛球馆">
+          <input type="hidden" name="event_date" value="{{ meta_initial.event_date|date:'Y-m-d' }}">
+          <input type="hidden" name="event_start_time" value="{{ meta_initial.event_start_time|time:'H:i' }}">
+          {% if meta_initial.event_end_time %}
+          <input type="hidden" name="event_end_time" value="{{ meta_initial.event_end_time|time:'H:i' }}">
+          {% endif %}
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">取消</button>
+          <button type="submit" class="btn btn-primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% include 'rotation/includes/session_confirm_modal.html' with modal_id='generateConfirmModal' confirm_btn_id='confirmGenerateBtn' confirm_btn_text='生成对阵' player_count_id='confirmGeneratePlayerCount' player_count=session.reg_count default_rounds=default_rounds default_avoid=session.avoid_mixed_gender_doubles rounds_input_id='id_generate_rounds' avoid_input_id='id_generate_avoid' radio_prefix='generate' round_options=round_options %}
+
+<div class="modal fade" id="avatarModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title w-100 text-center fw-bold">设置头像</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" enctype="multipart/form-data" id="avatarForm" action="#">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{% url 'session_detail' session.pk %}">
+        <input type="hidden" name="player_id" id="avatarPlayerId" value="">
+        <div class="modal-body pt-2 text-center">
+          <p class="text-muted mb-3" id="avatarModalPlayerName"></p>
+          <div class="avatar-modal-preview-wrap mb-3">
+            <img src="" alt="" id="avatarModalPreviewImg" class="avatar-modal-preview-img d-none">
+            <span id="avatarModalPreviewLetter" class="player-avatar player-avatar-lg"></span>
+          </div>
+          <label class="form-label small text-start w-100 mb-1">选择图片</label>
+          <input type="file" name="avatar" id="avatarFileInput" class="form-control"
+                 accept="image/jpeg,image/png,image/webp,image/gif">
+          <div class="form-text text-start">支持 JPG、PNG、WebP、GIF，不超过 10MB</div>
+        </div>
+        <div class="modal-footer border-0 pt-0 flex-column gap-2">
+          <button type="submit" class="btn btn-primary w-100">保存头像</button>
+          <button type="submit" name="clear_avatar" value="1" class="btn btn-outline-secondary w-100 d-none"
+                  id="avatarClearBtn">清除头像</button>
+          <button type="button" class="btn btn-light w-100" data-bs-dismiss="modal">取消</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var searchInput = document.getElementById('playerSearch');
+  if (searchInput) {
+    var items = document.querySelectorAll('#playerPicker .player-picker-item');
+    var noMatch = document.getElementById('playerPickerNoMatch');
+    searchInput.addEventListener('input', function () {
+      var q = this.value.trim().toLowerCase();
+      var visible = 0;
+      items.forEach(function (item) {
+        var matched = !q || (item.dataset.name || '').includes(q);
+        item.style.display = matched ? '' : 'none';
+        if (matched) {
+          visible += 1;
+        }
+      });
+      if (noMatch) {
+        noMatch.classList.toggle('visible', q && visible === 0);
+      }
+    });
+  }
+
+  var form = document.getElementById('generateForm');
+  var modalEl = document.getElementById('generateConfirmModal');
+  if (form && modalEl) {
+    var confirmModal = new bootstrap.Modal(modalEl);
+    var prefix = modalEl.dataset.radioPrefix;
+
+    form.addEventListener('submit', function (e) {
+      if (form.dataset.confirmed === '1') {
+        return;
+      }
+      e.preventDefault();
+      confirmModal.show();
+    });
+
+    document.getElementById('confirmGenerateBtn').addEventListener('click', function () {
+      var roundsInput = document.querySelector('input[name="' + prefix + '_rounds"]:checked');
+      if (!roundsInput) {
+        return;
+      }
+      var rounds = roundsInput.value;
+      var genderInput = document.querySelector('input[name="' + prefix + '_gender_mode"]:checked');
+      var avoid = genderInput && genderInput.value === 'avoid';
+      document.getElementById(modalEl.dataset.roundsInput).value = rounds;
+      document.getElementById(modalEl.dataset.avoidInput).value = avoid ? '1' : '0';
+      form.dataset.confirmed = '1';
+      confirmModal.hide();
+      form.submit();
+    });
+
+    modalEl.addEventListener('hidden.bs.modal', function () {
+      if (form.dataset.confirmed !== '1') {
+        delete form.dataset.confirmed;
+      }
+    });
+  }
+
+  var avatarModal = document.getElementById('avatarModal');
+  if (avatarModal) {
+    var avatarForm = document.getElementById('avatarForm');
+    var avatarFileInput = document.getElementById('avatarFileInput');
+    var avatarPlayerIdInput = document.getElementById('avatarPlayerId');
+    var previewImg = document.getElementById('avatarModalPreviewImg');
+    var previewLetter = document.getElementById('avatarModalPreviewLetter');
+    var playerNameEl = document.getElementById('avatarModalPlayerName');
+    var clearBtn = document.getElementById('avatarClearBtn');
+    var avatarUrlTemplate = '{% url "player_update_avatar" 999999 %}';
+    var currentPlayerId = '';
+
+    function avatarActionUrl(playerId) {
+      return avatarUrlTemplate.replace('999999', String(playerId));
+    }
+
+    function showLetterPreview(name) {
+      previewImg.classList.add('d-none');
+      previewImg.removeAttribute('src');
+      previewLetter.classList.remove('d-none');
+      previewLetter.textContent = (name || '?').slice(0, 1);
+    }
+
+    function showImagePreview(url) {
+      previewLetter.classList.add('d-none');
+      previewImg.classList.remove('d-none');
+      previewImg.src = url;
+    }
+
+    function openAvatarModal(btn) {
+      if (!btn) {
+        return;
+      }
+      currentPlayerId = btn.dataset.playerId || '';
+      avatarPlayerIdInput.value = currentPlayerId;
+      var playerName = btn.dataset.playerName || '';
+      var avatarUrl = btn.dataset.avatarUrl || '';
+      playerNameEl.textContent = playerName;
+      avatarFileInput.value = '';
+      if (avatarUrl) {
+        showImagePreview(avatarUrl);
+        clearBtn.classList.remove('d-none');
+      } else {
+        showLetterPreview(playerName);
+        clearBtn.classList.add('d-none');
+      }
+    }
+
+    avatarModal.addEventListener('show.bs.modal', function (event) {
+      var btn = event.relatedTarget && event.relatedTarget.closest
+        ? event.relatedTarget.closest('.player-avatar-btn')
+        : null;
+      openAvatarModal(btn);
+    });
+
+    avatarForm.addEventListener('submit', function (e) {
+      var submitter = e.submitter;
+      var isClear = submitter && submitter.name === 'clear_avatar';
+      if (!currentPlayerId) {
+        e.preventDefault();
+        alert('未识别球员，请关闭后重新点击头像');
+        return;
+      }
+      avatarForm.action = avatarActionUrl(currentPlayerId);
+      if (!isClear && (!avatarFileInput.files || !avatarFileInput.files.length)) {
+        e.preventDefault();
+        alert('请先选择图片');
+      }
+    });
+
+    avatarFileInput.addEventListener('change', function () {
+      var file = this.files && this.files[0];
+      if (!file) {
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        showImagePreview(e.target.result);
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+})();
+</script>
 {% endblock %}

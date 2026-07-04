@@ -1,1 +1,14 @@
+{% if clickable %}
+<button type="button" class="player-avatar-btn"
+        data-bs-toggle="modal" data-bs-target="#avatarModal"
+        data-player-id="{{ player.pk }}"
+        data-player-name="{{ player.display_name }}"
+        data-avatar-url="{% if player.avatar %}{{ player.avatar.url }}{% endif %}"
+        title="设置头像">
+{% endif %}
+{% if player.avatar %}
+<img src="{{ player.avatar.url }}" alt="" class="player-avatar player-avatar-{{ size|default:'md' }} player-avatar-img">
+{% else %}
 <span class="player-avatar player-avatar-{{ size|default:'md' }}">{{ player.display_name|slice:":1" }}</span>
+{% endif %}
+{% if clickable %}</button>{% endif %}

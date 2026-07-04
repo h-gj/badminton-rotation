@@ -1,0 +1,199 @@
+<script>
+window.PosterSave = (function () {
+  var isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  var savePageUrl = null;
+  var savePageEl = null;
+
+  function pickCanvasScale(width, height) {
+    var maxDimension = isMobile ? 4096 : 8192;
+    var maxArea = isMobile ? 4096 * 4096 : 16777216;
+    var scale = 2;
+    while (scale > 0.25 && (
+      width * scale > maxDimension ||
+      height * scale > maxDimension ||
+      width * height * scale * scale > maxArea
+    )) {
+      scale -= 0.25;
+    }
+    var fitScale = Math.min(maxDimension / width, maxDimension / height, 2);
+    return Math.max(0.25, Math.min(scale, fitScale));
+  }
+
+  function measurePoster(element) {
+    var shell = element.querySelector('.matches-poster-shell')
+      || element.querySelector('.poster-shell')
+      || element;
+    var width = shell.offsetWidth || element.offsetWidth || 750;
+    var height = Math.max(shell.scrollHeight, shell.offsetHeight, element.scrollHeight);
+    return { shell: shell, width: width, height: height };
+  }
+
+  function capturePoster(element) {
+    if (typeof html2canvas !== 'function') {
+      return Promise.reject(new Error('html2canvas missing'));
+    }
+
+    var measured = measurePoster(element);
+    var width = measured.width;
+    var height = measured.height;
+    if (!height) {
+      return Promise.reject(new Error('poster height is zero'));
+    }
+
+    var clone = element.cloneNode(true);
+    clone.removeAttribute('id');
+    clone.classList.add('poster-capture-clone');
+    document.body.appendChild(clone);
+
+    var captureTarget = clone.querySelector('.matches-poster-shell')
+      || clone.querySelector('.poster-shell')
+      || clone;
+
+    return new Promise(function (resolve, reject) {
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          var scale = pickCanvasScale(width, height);
+
+          html2canvas(captureTarget, {
+            scale: scale,
+            width: width,
+            height: height,
+            backgroundColor: '#ffffff',
+            useCORS: true,
+            allowTaint: true,
+            logging: false,
+            scrollX: 0,
+            scrollY: 0,
+            windowWidth: width,
+            windowHeight: height,
+          }).then(function (canvas) {
+            if (!canvas.width || !canvas.height) {
+              reject(new Error('empty canvas'));
+              return;
+            }
+            resolve(canvas);
+          }).catch(reject).finally(function () {
+            document.body.removeChild(clone);
+          });
+        });
+      });
+    });
+  }
+
+  function closeSavePage() {
+    if (savePageEl) {
+      savePageEl.remove();
+      savePageEl = null;
+    }
+    document.body.style.overflow = '';
+    if (savePageUrl) {
+      URL.revokeObjectURL(savePageUrl);
+      savePageUrl = null;
+    }
+  }
+
+  function downloadBlob(blob, filename) {
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+  }
+
+  function tryShareFile(blob, filename, title, onFail) {
+    if (!isMobile || !navigator.share) {
+      onFail();
+      return;
+    }
+    var file = new File([blob], filename, { type: 'image/png' });
+    if (navigator.canShare && !navigator.canShare({ files: [file] })) {
+      onFail();
+      return;
+    }
+    navigator.share({ files: [file], title: title })
+      .catch(onFail);
+  }
+
+  function openSavePage(blob, filename, title, dataUrl) {
+    closeSavePage();
+    savePageUrl = URL.createObjectURL(blob);
+    var imgSrc = dataUrl || savePageUrl;
+
+    savePageEl = document.createElement('div');
+    savePageEl.className = 'poster-save-page';
+    savePageEl.innerHTML =
+      '<div class="poster-save-page-header">' +
+        '<span class="poster-save-page-hint">长按图片进行保存</span>' +
+        '<button type="button" class="poster-save-page-close">关闭</button>' +
+      '</div>' +
+      '<div class="poster-save-page-body">' +
+        '<img src="' + imgSrc + '" alt="' + title + '" class="poster-save-page-img">' +
+      '</div>';
+
+    savePageEl.querySelector('.poster-save-page-close').addEventListener('click', closeSavePage);
+
+    document.body.appendChild(savePageEl);
+    document.body.style.overflow = 'hidden';
+    savePageEl.scrollTop = 0;
+  }
+
+  function saveToAlbum(blob, options) {
+    var filename = options.filename || 'poster.png';
+    var title = options.title || '图片';
+    var dataUrl = options.dataUrl || '';
+
+    tryShareFile(blob, filename, title, function () {
+      if (isMobile) {
+        openSavePage(blob, filename, title, dataUrl);
+        return;
+      }
+      downloadBlob(blob, filename);
+    });
+  }
+
+  function bind(btn, poster, options) {
+    if (!btn || !poster) {
+      return;
+    }
+
+    options = options || {};
+    var label = options.label || btn.textContent;
+
+    btn.addEventListener('click', function () {
+      btn.disabled = true;
+      btn.textContent = options.loadingLabel || '生成中…';
+
+      capturePoster(poster).then(function (canvas) {
+        var dataUrl = canvas.toDataURL('image/png');
+        canvas.toBlob(function (blob) {
+          btn.disabled = false;
+          btn.textContent = label;
+          if (!blob || blob.size < 500) {
+            alert(options.failMsg || '图片生成失败，请重试');
+            return;
+          }
+          saveToAlbum(blob, {
+            filename: btn.dataset.filename || options.filename || 'poster.png',
+            title: options.title || '图片',
+            dataUrl: dataUrl,
+          });
+        }, 'image/png');
+      }).catch(function () {
+        btn.disabled = false;
+        btn.textContent = label;
+        alert(options.failMsg || '图片生成失败，请重试');
+      });
+    });
+  }
+
+  return {
+    bind: bind,
+    capturePoster: capturePoster,
+    saveToAlbum: saveToAlbum,
+  };
+})();
+</script>

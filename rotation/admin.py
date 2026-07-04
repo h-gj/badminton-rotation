@@ -1,11 +1,26 @@
 from django.contrib import admin
 
-from rotation.models import Match, Player, Registration, Session
+from rotation.models import Club, ClubMembership, Match, Player, Registration, Session
+
+
+@admin.register(Club)
+class ClubAdmin(admin.ModelAdmin):
+    list_display = ['name', 'owner', 'invite_code', 'created_at']
+    search_fields = ['name', 'owner__username', 'invite_code']
+    readonly_fields = ['invite_code']
+
+
+@admin.register(ClubMembership)
+class ClubMembershipAdmin(admin.ModelAdmin):
+    list_display = ['user', 'club', 'joined_at']
+    list_filter = ['club']
+    search_fields = ['user__username', 'club__name']
 
 
 @admin.register(Player)
 class PlayerAdmin(admin.ModelAdmin):
-    list_display = ['name', 'nickname', 'phone', 'created_at']
+    list_display = ['name', 'nickname', 'club', 'gender', 'phone', 'created_at']
+    list_filter = ['club']
     search_fields = ['name', 'nickname', 'phone']
 
 
@@ -22,8 +37,8 @@ class MatchInline(admin.TabularInline):
 
 @admin.register(Session)
 class SessionAdmin(admin.ModelAdmin):
-    list_display = ['title', 'event_date', 'location', 'status', 'courts', 'rounds']
-    list_filter = ['status', 'event_date']
+    list_display = ['title', 'club', 'event_date', 'status', 'courts', 'rounds', 'avoid_mixed_gender_doubles']
+    list_filter = ['status', 'event_date', 'club']
     inlines = [RegistrationInline, MatchInline]
 
 

@@ -1,0 +1,18 @@
+# 复制到 %USERPROFILE%\.cloudflared\config.yml 并替换占位符
+#
+# 前置步骤（PowerShell）：
+#   winget install Cloudflare.cloudflared
+#   cloudflared tunnel login
+#   cloudflared tunnel create badminton-rotation
+#   cloudflared tunnel route dns badminton-rotation app.你的域名.com
+#
+# 将 <TUNNEL_ID> 替换为 create 命令输出的 UUID
+# 将 credentials-file 路径改为实际的 .json 文件路径
+
+tunnel: eb796505-a489-4061-9c7a-7e9df5626660
+credentials-file: C:\Users\69063\.cloudflared\eb796505-a489-4061-9c7a-7e9df5626660.json
+
+ingress:
+  - hostname: goodminton.hgjhub.com
+    service: http://127.0.0.1:8000
+  - service: http_status:404

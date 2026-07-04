@@ -1,0 +1,208 @@
+{% extends 'rotation/base.html' %}
+{% block title %}个人中心 - 羽转{% endblock %}
+{% block content %}
+<div class="profile-page">
+  <div class="profile-hero">
+    <div class="profile-avatar-wrap">
+      {% if can_edit_avatar %}
+      <button type="button" class="profile-avatar-btn" data-bs-toggle="modal" data-bs-target="#profileAvatarModal"
+              title="更换头像">
+        {% if player and player.avatar %}
+        <img src="{{ player.avatar.url }}" alt="" class="player-avatar player-avatar-xl player-avatar-img">
+        {% elif player %}
+        <span class="player-avatar player-avatar-xl">{{ player.display_name|slice:":1" }}</span>
+        {% else %}
+        <span class="player-avatar player-avatar-xl">{{ user.username|slice:":1"|upper }}</span>
+        {% endif %}
+        <span class="profile-avatar-edit">换头像</span>
+      </button>
+      {% else %}
+        {% if player and player.avatar %}
+        <img src="{{ player.avatar.url }}" alt="" class="player-avatar player-avatar-xl player-avatar-img">
+        {% elif player %}
+        <span class="player-avatar player-avatar-xl">{{ player.display_name|slice:":1" }}</span>
+        {% else %}
+        <span class="player-avatar player-avatar-xl">{{ user.username|slice:":1"|upper }}</span>
+        {% endif %}
+      {% endif %}
+    </div>
+    <div class="profile-hero-body">
+      <h1 class="profile-hero-name">{{ display_name }}</h1>
+      <p class="profile-hero-meta">@{{ user.username }}</p>
+      <span class="profile-role-badge{% if role_class %} profile-role-badge--{{ role_class }}{% endif %}">{{ role_label }}</span>
+    </div>
+  </div>
+
+  {% if stats %}
+  <div class="profile-stat-grid">
+    <div class="profile-stat-item">
+      <div class="profile-stat-value player-stat-win">{{ stats.total.wins }}</div>
+      <div class="profile-stat-label">胜场</div>
+    </div>
+    <div class="profile-stat-item">
+      <div class="profile-stat-value player-stat-loss">{{ stats.total.losses }}</div>
+      <div class="profile-stat-label">负场</div>
+    </div>
+    <div class="profile-stat-item">
+      <div class="profile-stat-value">{{ stats.total.matches }}</div>
+      <div class="profile-stat-label">总场次</div>
+    </div>
+    <div class="profile-stat-item">
+      <div class="profile-stat-value player-stat-rate">{{ stats.total.win_rate }}%</div>
+      <div class="profile-stat-label">胜率</div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="profile-card">
+    <div class="profile-card-title">账号信息</div>
+    <div class="profile-info-row">
+      <span class="profile-info-label">登录用户名</span>
+      <span class="profile-info-value">{{ user.username }}</span>
+    </div>
+    {% if player %}
+    <div class="profile-info-row">
+      <span class="profile-info-label">球员姓名</span>
+      <span class="profile-info-value">{{ player.name }}{% if player.nickname %}（{{ player.nickname }}）{% endif %}</span>
+    </div>
+    {% endif %}
+    <div class="profile-info-row">
+      <span class="profile-info-label">注册时间</span>
+      <span class="profile-info-value">{{ user.date_joined|date:"Y-m-d H:i" }}</span>
+    </div>
+  </div>
+
+  <div class="profile-card">
+    <div class="profile-card-title">俱乐部</div>
+    {% if club %}
+    <div class="profile-info-row">
+      <span class="profile-info-label">当前俱乐部</span>
+      <span class="profile-info-value">{{ club.name }}</span>
+    </div>
+    {% if owned_club %}
+    <div class="profile-info-row">
+      <span class="profile-info-label">邀请码</span>
+      <span class="profile-info-value profile-invite-code" id="clubInviteCode">{{ owned_club.invite_code }}</span>
+    </div>
+    <div class="profile-info-row">
+      <span class="profile-info-label">成员登录规则</span>
+      <span class="profile-info-value">{{ owned_club.invite_code|lower }}_姓名拼音</span>
+    </div>
+    {% elif membership %}
+    <div class="profile-info-row">
+      <span class="profile-info-label">加入时间</span>
+      <span class="profile-info-value">{{ membership.joined_at|date:"Y-m-d H:i" }}</span>
+    </div>
+    {% endif %}
+    {% elif is_admin %}
+    <div class="profile-info-row">
+      <span class="profile-info-label">数据范围</span>
+      <span class="profile-info-value">全部俱乐部</span>
+    </div>
+    {% else %}
+    <div class="profile-info-row">
+      <span class="profile-info-label">状态</span>
+      <span class="profile-info-value">尚未加入俱乐部</span>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="profile-actions">
+    {% if player %}
+    <a href="{% url 'player_detail' player.pk %}" class="btn btn-primary btn-lg">查看我的战绩</a>
+    {% endif %}
+    {% if owned_club %}
+    <button type="button" class="btn btn-outline-primary btn-lg" id="copyInviteCodeBtn">复制邀请码</button>
+    {% endif %}
+    {% if not club and not is_admin %}
+    <a href="{% url 'club_setup' %}" class="btn btn-outline-primary btn-lg">创建或加入俱乐部</a>
+    {% endif %}
+    <a href="{% url 'logout' %}" class="btn btn-outline-secondary btn-lg">退出登录</a>
+  </div>
+</div>
+
+{% if can_edit_avatar %}
+<div class="modal fade" id="profileAvatarModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title w-100 text-center fw-bold">设置头像</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" enctype="multipart/form-data" action="{% url 'profile_update_avatar' %}" id="profileAvatarForm">
+        {% csrf_token %}
+        <div class="modal-body pt-2 text-center">
+          <div class="avatar-modal-preview-wrap mb-3">
+            {% if player and player.avatar %}
+            <img src="{{ player.avatar.url }}" alt="" id="profileAvatarPreviewImg" class="avatar-modal-preview-img">
+            <span id="profileAvatarPreviewLetter" class="player-avatar player-avatar-lg d-none"></span>
+            {% else %}
+            <img src="" alt="" id="profileAvatarPreviewImg" class="avatar-modal-preview-img d-none">
+            <span id="profileAvatarPreviewLetter" class="player-avatar player-avatar-lg">{{ display_name|slice:":1" }}</span>
+            {% endif %}
+          </div>
+          <label class="form-label small text-start w-100 mb-1">选择图片</label>
+          <input type="file" name="avatar" id="profileAvatarFileInput" class="form-control"
+                 accept="image/jpeg,image/png,image/webp,image/gif">
+          <div class="form-text text-start">支持 JPG、PNG、WebP、GIF，不超过 10MB</div>
+        </div>
+        <div class="modal-footer border-0 pt-0 flex-column gap-2">
+          <button type="submit" class="btn btn-primary w-100">保存头像</button>
+          {% if player and player.avatar %}
+          <button type="submit" name="clear_avatar" value="1" class="btn btn-outline-secondary w-100">清除头像</button>
+          {% endif %}
+          <button type="button" class="btn btn-light w-100" data-bs-dismiss="modal">取消</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if owned_club %}
+<script>
+(function () {
+  var btn = document.getElementById('copyInviteCodeBtn');
+  var codeEl = document.getElementById('clubInviteCode');
+  if (!btn || !codeEl) return;
+  btn.addEventListener('click', function () {
+    var text = codeEl.textContent.trim();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        btn.textContent = '已复制';
+        setTimeout(function () { btn.textContent = '复制邀请码'; }, 1500);
+      });
+    } else {
+      prompt('邀请码', text);
+    }
+  });
+})();
+</script>
+{% endif %}
+{% if can_edit_avatar %}
+<script>
+(function () {
+  var fileInput = document.getElementById('profileAvatarFileInput');
+  var previewImg = document.getElementById('profileAvatarPreviewImg');
+  var previewLetter = document.getElementById('profileAvatarPreviewLetter');
+  if (!fileInput || !previewImg) return;
+
+  fileInput.addEventListener('change', function () {
+    var file = fileInput.files && fileInput.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      previewImg.src = e.target.result;
+      previewImg.classList.remove('d-none');
+      if (previewLetter) {
+        previewLetter.classList.add('d-none');
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

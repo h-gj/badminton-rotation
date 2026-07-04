@@ -1,0 +1,89 @@
+from django.db.models import Count, Q
+
+from rotation.models import Club, ClubMembership, Player, Session
+
+
+def is_site_admin(user):
+    """站点管理员：可查看所有俱乐部数据（Django staff / superuser）。"""
+    return user.is_authenticated and (user.is_superuser or user.is_staff)
+
+
+def get_user_club(user):
+    if not user.is_authenticated:
+        return None
+    owned = Club.objects.filter(owner=user).first()
+    if owned:
+        return owned
+    membership = (
+        ClubMembership.objects.filter(user=user)
+        .select_related('club')
+        .first()
+    )
+    return membership.club if membership else None
+
+
+def user_has_club(user):
+    return get_user_club(user) is not None
+
+
+def user_owns_club(user):
+    if not user.is_authenticated:
+        return False
+    return Club.objects.filter(owner=user).exists()
+
+
+def user_joined_club(user):
+    if not user.is_authenticated:
+        return False
+    return ClubMembership.objects.filter(user=user).exists()
+
+
+def user_club_scope(user):
+    """返回用于筛选的俱乐部；管理员返回 None 表示不限俱乐部。"""
+    if is_site_admin(user):
+        return None
+    return get_user_club(user)
+
+
+def user_session_queryset(user):
+    """当前用户可见的活动：管理员看全部，其余仅限其创建或加入的俱乐部。"""
+    qs = Session.objects.annotate(reg_count=Count('registrations'))
+    if is_site_admin(user):
+        return qs.order_by('-event_date', '-created_at')
+    club = get_user_club(user)
+    if not club:
+        return Session.objects.none()
+    return qs.filter(club_id=club.pk).order_by('-event_date', '-created_at')
+
+
+def user_player_queryset(user, q=''):
+    """当前用户可见的球员：管理员看全部，其余仅限其俱乐部。"""
+    if is_site_admin(user):
+        qs = Player.objects.all()
+    else:
+        club = get_user_club(user)
+        if not club:
+            return Player.objects.none()
+        qs = Player.objects.filter(club_id=club.pk)
+    qs = qs.annotate(session_count=Count('registrations')).order_by('-session_count', 'name')
+    if q:
+        qs = qs.filter(Q(name__icontains=q) | Q(nickname__icontains=q))
+    return qs
+
+
+def user_can_access_session(user, session):
+    if is_site_admin(user):
+        return True
+    club = get_user_club(user)
+    if not club or not session.club_id:
+        return False
+    return session.club_id == club.pk
+
+
+def user_can_access_player(user, player):
+    if is_site_admin(user):
+        return True
+    club = get_user_club(user)
+    if not club or not player.club_id:
+        return False
+    return player.club_id == club.pk

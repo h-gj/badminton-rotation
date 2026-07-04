@@ -1,0 +1,51 @@
+<div class="modal fade session-confirm-modal" id="{{ modal_id }}" tabindex="-1" aria-hidden="true"
+     data-rounds-input="{{ rounds_input_id }}"
+     data-avoid-input="{{ avoid_input_id }}"
+     data-radio-prefix="{{ radio_prefix }}">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title w-100 text-center fw-bold">确认设置</h5>
+      </div>
+      <div class="modal-body pt-2">
+        <p class="text-center text-muted mb-4">参与比赛人数：<strong class="text-dark" id="{{ player_count_id }}">{{ player_count }}</strong> 人</p>
+        <div class="confirm-setting-group mb-3">
+          <div class="confirm-setting-label">女生设置</div>
+          <div class="confirm-setting-options">
+            <label class="confirm-option">
+              <input type="radio" name="{{ radio_prefix }}_gender_mode" value="standard"
+                     {% if not default_avoid %}checked{% endif %}>
+              <span class="confirm-option-box">标准</span>
+            </label>
+            <label class="confirm-option">
+              <input type="radio" name="{{ radio_prefix }}_gender_mode" value="avoid"
+                     {% if default_avoid %}checked{% endif %}>
+              <span class="confirm-option-box">避免女双碰到男双</span>
+            </label>
+          </div>
+        </div>
+        <div class="confirm-setting-group">
+          <div class="confirm-setting-label">比赛局数</div>
+          {% if round_options %}
+          <div class="confirm-setting-options">
+            {% for rounds in round_options %}
+            <label class="confirm-option">
+              <input type="radio" name="{{ radio_prefix }}_rounds" value="{{ rounds }}"
+                     {% if rounds == default_rounds %}checked{% endif %}>
+              <span class="confirm-option-box">{{ rounds }}局</span>
+            </label>
+            {% endfor %}
+          </div>
+          <div class="form-text mt-2 mb-0">按人数与场地推荐，保证每人上场次数相同</div>
+          {% else %}
+          <div class="form-text mb-0">至少需要 4 人才能生成对阵</div>
+          {% endif %}
+        </div>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-light flex-fill" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-primary flex-fill" id="{{ confirm_btn_id }}">{{ confirm_btn_text }}</button>
+      </div>
+    </div>
+  </div>
+</div>

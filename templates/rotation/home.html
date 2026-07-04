@@ -1,42 +1,150 @@
 ﻿{% extends 'rotation/base.html' %}
-{% block title %}首页 - 羽毛球轮转{% endblock %}
+{% block title %}活动列表 - 羽转{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-  <div>
-    <h2 class="mb-1">活动列表</h2>
-    <p class="text-muted mb-0">报名 → 生成对阵 → 录入比分 → 查看排行榜</p>
-  </div>
-  <a href="{% url 'session_create' %}" class="btn btn-primary">+ 新建活动</a>
-</div>
-
-{% if sessions %}
-<div class="row g-3">
-  {% for s in sessions %}
-  <div class="col-md-6">
-    <div class="card h-100">
-      <div class="card-body">
-        <div class="d-flex justify-content-between">
-          <h5 class="card-title">{{ s.title }}</h5>
-          <span class="badge badge-status-{{ s.status }}">{{ s.get_status_display }}</span>
-        </div>
-        <p class="text-muted mb-2">{{ s.event_date|date:"m-d H:i" }} · {{ s.location|default:"未填场地" }}</p>
-        <p class="mb-3">
-          <span class="badge bg-secondary">{{ s.reg_count }} 人报名</span>
-          <span class="badge bg-info text-dark">{{ s.courts }} 片场</span>
-          <span class="badge bg-info text-dark">{{ s.rounds }} 轮</span>
-        </p>
-        <a href="{% url 'session_detail' s.pk %}" class="btn btn-outline-primary btn-sm">进入活动</a>
+<div class="session-list-page player-page" id="sessionListPage"
+     data-api-url="{% url 'session_list' %}"
+     data-create-url="{% url 'session_create' %}">
+  <div class="session-list-header">
+    <div class="session-list-header-row">
+      <h2 class="player-page-title">活动列表</h2>
+      <div class="session-list-header-actions">
+        {% if can_create_session %}
+        <a href="{% url 'session_import_wechat' %}" class="btn btn-outline-primary btn-sm session-list-create-btn">截图导入</a>
+        <a href="{% url 'session_create' %}" class="btn btn-primary btn-sm session-list-create-btn">+ 新建</a>
+        {% else %}
+        <a href="{% url 'club_setup' %}" class="btn btn-primary btn-sm session-list-create-btn">创建或加入俱乐部</a>
+        {% endif %}
       </div>
     </div>
+    <!-- <p class="session-list-flow">报名 → 生成对阵 → 录入比分 → 查看排行</p> -->
+    <p class="player-page-subtitle" id="sessionListSubtitle">加载中…</p>
   </div>
-  {% endfor %}
-</div>
-{% else %}
-<div class="card">
-  <div class="card-body text-center py-5 text-muted">
-    <p class="mb-3">还没有活动，先创建一个轮转吧</p>
-    <a href="{% url 'session_create' %}" class="btn btn-primary">创建活动</a>
+
+  <div class="session-list-grid" id="sessionListCard">
+    <div class="player-list-placeholder" id="sessionListLoading">加载中…</div>
   </div>
+
+  <nav class="player-list-pagination" id="sessionListPagination" aria-label="活动列表分页" hidden>
+    <button type="button" class="player-list-page-btn" id="sessionListPrev" disabled>上一页</button>
+    <span class="player-list-page-info" id="sessionListPageInfo">1 / 1</span>
+    <button type="button" class="player-list-page-btn" id="sessionListNext" disabled>下一页</button>
+  </nav>
 </div>
-{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var pageEl = document.getElementById('sessionListPage');
+  if (!pageEl) return;
+
+  var apiUrl = pageEl.dataset.apiUrl;
+  var createUrl = pageEl.dataset.createUrl;
+  var subtitleEl = document.getElementById('sessionListSubtitle');
+  var cardEl = document.getElementById('sessionListCard');
+  var paginationEl = document.getElementById('sessionListPagination');
+  var prevBtn = document.getElementById('sessionListPrev');
+  var nextBtn = document.getElementById('sessionListNext');
+  var pageInfoEl = document.getElementById('sessionListPageInfo');
+
+  var state = { page: 1, loading: false };
+
+  function escapeHtml(text) {
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function renderItem(item) {
+    return (
+      '<a href="' + escapeHtml(item.detail_url) + '" class="card session-list-card session-list-card-link">' +
+        '<div class="card-body session-list-card-body">' +
+          '<div class="session-list-card-top">' +
+            '<h5 class="session-list-card-title">' + escapeHtml(item.title) + '</h5>' +
+            '<span class="badge badge-status-' + escapeHtml(item.status) + ' session-list-card-status">' +
+              escapeHtml(item.status_display) +
+            '</span>' +
+          '</div>' +
+          '<p class="session-list-card-meta">' +
+            escapeHtml(item.event_date_label) + ' · ' + escapeHtml(item.location) +
+          '</p>' +
+          '<div class="session-list-card-footer">' +
+            '<span class="badge bg-secondary">' + item.reg_count + ' 人报名</span>' +
+            '<span class="badge bg-info text-dark">' + item.rounds + ' 轮</span>' +
+            '<span class="btn btn-outline-primary session-list-card-action">进入活动</span>' +
+          '</div>' +
+        '</div>' +
+      '</a>'
+    );
+  }
+
+  function renderSessions(data) {
+    subtitleEl.textContent = '共 ' + data.total + ' 场 · 按时间倒序';
+
+    if (!data.total) {
+      paginationEl.hidden = true;
+      cardEl.innerHTML =
+        '<div class="card"><div class="player-list-placeholder">' +
+          '<p class="mb-3">还没有活动，先创建一个轮转吧</p>' +
+          '<a href="' + escapeHtml(createUrl) + '" class="btn btn-primary btn-sm">创建活动</a>' +
+        '</div></div>';
+      return;
+    }
+
+    cardEl.innerHTML = data.items.map(renderItem).join('');
+
+    if (data.num_pages > 1) {
+      paginationEl.hidden = false;
+      pageInfoEl.textContent = data.page + ' / ' + data.num_pages;
+      prevBtn.disabled = !data.has_previous;
+      nextBtn.disabled = !data.has_next;
+    } else {
+      paginationEl.hidden = true;
+    }
+  }
+
+  function syncUrl() {
+    var params = new URLSearchParams();
+    if (state.page > 1) params.set('page', state.page);
+    var qs = params.toString();
+    history.replaceState(null, '', qs ? ('?' + qs) : window.location.pathname);
+  }
+
+  function loadSessions(page) {
+    if (state.loading) return;
+    state.page = page || 1;
+    state.loading = true;
+    cardEl.innerHTML = '<div class="card"><div class="player-list-placeholder">加载中…</div></div>';
+
+    fetch(apiUrl + '?page=' + state.page, {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      credentials: 'same-origin',
+    }).then(function (resp) {
+      return resp.json();
+    }).then(function (data) {
+      state.loading = false;
+      renderSessions(data);
+      syncUrl();
+    }).catch(function () {
+      state.loading = false;
+      subtitleEl.textContent = '加载失败';
+      cardEl.innerHTML = '<div class="player-list-placeholder">加载失败，请刷新重试</div>';
+    });
+  }
+
+  prevBtn.addEventListener('click', function () {
+    if (state.page > 1) loadSessions(state.page - 1);
+  });
+
+  nextBtn.addEventListener('click', function () {
+    loadSessions(state.page + 1);
+  });
+
+  var initial = new URLSearchParams(window.location.search);
+  state.page = parseInt(initial.get('page') || '1', 10) || 1;
+  loadSessions(state.page);
+})();
+</script>
 {% endblock %}

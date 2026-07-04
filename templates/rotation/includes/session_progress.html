@@ -2,10 +2,10 @@
 <div class="session-progress mb-3">
   <div class="d-flex justify-content-between align-items-center mb-1">
     <span class="session-progress-label">对局进度</span>
-    <span class="session-progress-count">{{ completed_count }}/{{ match_count }} 场</span>
+    <span class="session-progress-count" id="sessionProgressCount">{{ completed_count }}/{{ match_count }} 场</span>
   </div>
   <div class="session-progress-bar">
-    <div class="session-progress-fill" style="width: {% widthratio completed_count match_count 100 %}%"></div>
+    <div class="session-progress-fill" id="sessionProgressFill" style="width: {% widthratio completed_count match_count 100 %}%"></div>
   </div>
 </div>
 {% endif %}

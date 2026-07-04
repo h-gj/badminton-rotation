@@ -5,8 +5,8 @@ def _pair_key(a_id, b_id):
     return (a_id, b_id) if a_id < b_id else (b_id, a_id)
 
 
-def compute_session_stats(session):
-    """计算场次排行榜与个人统计。"""
+def compute_session_stats(session, sort_by='wins'):
+    """计算场次排行榜与个人统计。sort_by: wins（胜局）或 points（胜分）。"""
     matches = Match.objects.filter(session=session, is_completed=True).select_related(
         'team1_player1', 'team1_player2', 'team2_player1', 'team2_player2',
     )
@@ -102,9 +102,11 @@ def compute_session_stats(session):
         s['partner_list'] = partner_list
         leaderboard.append(s)
 
-    leaderboard.sort(
-        key=lambda x: (-x['wins'], -x['win_rate'], -x['point_diff'], x['player'].display_name)
-    )
+    if sort_by == 'points':
+        sort_key = lambda x: (-x['point_diff'], -x['wins'], -x['win_rate'], x['player'].display_name)
+    else:
+        sort_key = lambda x: (-x['wins'], -x['win_rate'], -x['point_diff'], x['player'].display_name)
+    leaderboard.sort(key=sort_key)
     for i, row in enumerate(leaderboard, start=1):
         row['rank'] = i
 

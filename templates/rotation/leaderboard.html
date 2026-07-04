@@ -1,7 +1,7 @@
 {% extends 'rotation/base.html' %}
 {% block title %}比赛成绩 - {{ session.title }}{% endblock %}
 {% block content %}
-<div class="session-page">
+<div class="session-page session-leaderboard-page">
   {% include 'rotation/includes/session_tabs.html' with active_tab='leaderboard' %}
 
   <div class="leaderboard-card mb-3">
@@ -10,13 +10,22 @@
         <tr>
           <th class="text-center" style="width: 52px;">排名</th>
           <th>球员</th>
-          <th class="text-center" style="width: 64px;">胜局</th>
-          <th class="text-center" style="width: 56px;">胜分</th>
+          <th class="text-center leaderboard-sort-th">
+            <button type="button" class="leaderboard-sort-btn" data-sort="wins">胜局</button>
+          </th>
+          <th class="text-center leaderboard-sort-th">
+            <button type="button" class="leaderboard-sort-btn" data-sort="points">胜分</button>
+          </th>
         </tr>
       </thead>
       <tbody>
         {% for row in leaderboard %}
-        <tr class="leaderboard-row{% if row.rank <= 3 %} leaderboard-top-{{ row.rank }}{% endif %}">
+        <tr class="leaderboard-row{% if row.rank <= 3 %} leaderboard-top-{{ row.rank }}{% endif %}"
+            data-player-id="{{ row.player.pk }}"
+            data-wins="{{ row.wins }}"
+            data-win-rate="{{ row.win_rate }}"
+            data-point-diff="{{ row.point_diff }}"
+            data-name="{{ row.player.display_name }}">
           <td class="text-center">
             {% if row.rank == 1 %}
             <span class="rank-medal rank-medal-gold" title="第 1 名">🥇</span>
@@ -30,7 +39,7 @@
           </td>
           <td>
             <div class="leaderboard-player-cell">
-              {% include 'rotation/includes/player_avatar.html' with player=row.player size='sm' %}
+              {% include 'rotation/includes/player_avatar.html' with player=row.player size='md' %}
               <a href="{% url 'player_detail' row.player.pk %}" class="leaderboard-player-name">
                 {{ row.player.display_name }}
               </a>
@@ -54,4 +63,148 @@
     </table>
   </div>
 </div>
+
+{% include 'rotation/includes/leaderboard_poster.html' %}
+
+{% if leaderboard %}
+<div class="session-bottom-bar">
+  <div class="session-bottom-actions">
+    <button type="button" class="btn btn-primary btn-lg w-100 session-poster-btn" id="savePosterBtn"
+            data-filename="badminton-{{ session.pk }}-leaderboard.png">
+      保存到相册
+    </button>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var tbody = document.querySelector('.leaderboard-table tbody');
+  if (!tbody) return;
+
+  var sortBtns = document.querySelectorAll('.leaderboard-sort-btn');
+  var podium = document.querySelector('.poster-podium');
+  var posterRows = document.querySelector('.poster-rows');
+  var currentSort = new URLSearchParams(window.location.search).get('sort') || '{{ sort_by|default:"wins" }}';
+  if (currentSort !== 'wins' && currentSort !== 'points') currentSort = 'wins';
+
+  function compareRows(a, b, sortBy) {
+    var aw = Number(a.dataset.wins), bw = Number(b.dataset.wins);
+    var ar = Number(a.dataset.winRate), br = Number(b.dataset.winRate);
+    var ap = Number(a.dataset.pointDiff), bp = Number(b.dataset.pointDiff);
+    var an = a.dataset.name || '', bn = b.dataset.name || '';
+    var keys = sortBy === 'points'
+      ? [[ap, bp, true], [aw, bw, true], [ar, br, true], [an, bn, false]]
+      : [[aw, bw, true], [ar, br, true], [ap, bp, true], [an, bn, false]];
+    for (var i = 0; i < keys.length; i++) {
+      var va = keys[i][0], vb = keys[i][1], desc = keys[i][2];
+      if (va !== vb) {
+        if (!desc) return va.localeCompare(vb, 'zh-CN');
+        return desc ? vb - va : va - vb;
+      }
+    }
+    return 0;
+  }
+
+  function tableRankHtml(rank) {
+    if (rank === 1) return '<span class="rank-medal rank-medal-gold" title="第 1 名">🥇</span>';
+    if (rank === 2) return '<span class="rank-medal rank-medal-silver" title="第 2 名">🥈</span>';
+    if (rank === 3) return '<span class="rank-medal rank-medal-bronze" title="第 3 名">🥉</span>';
+    return '<span class="rank-badge rank-badge-n">' + rank + '</span>';
+  }
+
+  function posterRankHtml(rank) {
+    if (rank === 1) return '🥇';
+    if (rank === 2) return '🥈';
+    if (rank === 3) return '🥉';
+    return String(rank);
+  }
+
+  function applySort(sortBy) {
+    currentSort = sortBy;
+    var rows = Array.from(tbody.querySelectorAll('tr.leaderboard-row'));
+    rows.sort(function (a, b) { return compareRows(a, b, sortBy); });
+
+    rows.forEach(function (row, index) {
+      var rank = index + 1;
+      tbody.appendChild(row);
+      row.querySelector('td').innerHTML = tableRankHtml(rank);
+      row.classList.remove('leaderboard-top-1', 'leaderboard-top-2', 'leaderboard-top-3');
+      if (rank <= 3) row.classList.add('leaderboard-top-' + rank);
+      row.dataset.rank = String(rank);
+    });
+
+    if (podium) {
+      var podiumItems = Array.from(podium.querySelectorAll('.poster-podium-item'));
+      var byPlayer = {};
+      podiumItems.forEach(function (el) { byPlayer[el.dataset.playerId] = el; });
+      podiumItems.forEach(function (el) { el.style.display = 'none'; });
+      rows.slice(0, 3).forEach(function (row) {
+        var el = byPlayer[row.dataset.playerId];
+        if (!el) return;
+        var rank = Number(row.dataset.rank);
+        el.style.display = '';
+        el.className = 'poster-podium-item poster-podium-' + rank;
+        var rankEl = el.querySelector('.poster-podium-rank');
+        if (rankEl) rankEl.textContent = posterRankHtml(rank);
+        podium.appendChild(el);
+      });
+    }
+
+    if (posterRows) {
+      var rowItems = Array.from(posterRows.querySelectorAll('.poster-row'));
+      var posterByPlayer = {};
+      rowItems.forEach(function (el) { posterByPlayer[el.dataset.playerId] = el; });
+      var total = rows.length;
+      rows.forEach(function (row) {
+        var el = posterByPlayer[row.dataset.playerId];
+        if (!el) return;
+        var rank = Number(row.dataset.rank);
+        var show = rank > 3 || total <= 3;
+        el.style.display = show ? '' : 'none';
+        if (!show) return;
+        el.className = 'poster-row' + (rank <= 3 ? ' poster-row-top-' + rank : '');
+        var rankEl = el.querySelector('.poster-col-rank');
+        if (rankEl) rankEl.textContent = posterRankHtml(rank);
+        posterRows.appendChild(el);
+      });
+    }
+
+    sortBtns.forEach(function (btn) {
+      btn.classList.toggle('active', btn.dataset.sort === sortBy);
+    });
+
+    var url = new URL(window.location.href);
+    if (sortBy === 'wins') {
+      url.searchParams.delete('sort');
+    } else {
+      url.searchParams.set('sort', sortBy);
+    }
+    history.replaceState(null, '', url.pathname + url.search);
+  }
+
+  sortBtns.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      applySort(btn.dataset.sort);
+    });
+  });
+
+  applySort(currentSort);
+})();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+{% include 'rotation/includes/poster_save_script.html' %}
+<script>
+PosterSave.bind(
+  document.getElementById('savePosterBtn'),
+  document.getElementById('leaderboardPoster'),
+  {
+    label: '保存到相册',
+    title: '比赛成绩海报',
+    failMsg: '海报生成失败，请重试',
+  }
+);
+</script>
 {% endblock %}

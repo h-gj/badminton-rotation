@@ -1,31 +1,175 @@
 {% extends 'rotation/base.html' %}
 {% block title %}球员列表{% endblock %}
 {% block content %}
-<h2 class="mb-4">球员列表</h2>
-<div class="card">
-  <div class="table-responsive">
-    <table class="table table-hover mb-0">
-      <thead class="table-light">
-        <tr>
-          <th>姓名</th>
-          <th>昵称</th>
-          <th>参与活动</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for p in players %}
-        <tr>
-          <td>{{ p.name }}</td>
-          <td>{{ p.nickname|default:"-" }}</td>
-          <td>{{ p.session_count }} 次</td>
-          <td><a href="{% url 'player_detail' p.pk %}" class="btn btn-sm btn-outline-primary">统计</a></td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="4" class="text-center text-muted py-4">暂无球员</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+<div class="player-page" id="playerListPage" data-api-url="{% url 'player_list' %}">
+  <div class="player-page-header">
+    <h2 class="player-page-title">球员列表</h2>
+    <p class="player-page-subtitle" id="playerListSubtitle">加载中…</p>
   </div>
+
+  <div class="player-list-search-wrap" id="playerListSearchWrap" hidden>
+    <input type="search" id="playerListSearch" class="form-control player-list-search"
+           placeholder="搜索姓名或昵称…" autocomplete="off">
+  </div>
+
+  <div class="player-list-card" id="playerListCard">
+    <div class="player-list-placeholder" id="playerListLoading">加载中…</div>
+  </div>
+
+  <nav class="player-list-pagination" id="playerListPagination" aria-label="球员列表分页" hidden>
+    <button type="button" class="player-list-page-btn" id="playerListPrev" disabled>上一页</button>
+    <span class="player-list-page-info" id="playerListPageInfo">1 / 1</span>
+    <button type="button" class="player-list-page-btn" id="playerListNext" disabled>下一页</button>
+  </nav>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var pageEl = document.getElementById('playerListPage');
+  if (!pageEl) return;
+
+  var apiUrl = pageEl.dataset.apiUrl;
+  var subtitleEl = document.getElementById('playerListSubtitle');
+  var searchWrap = document.getElementById('playerListSearchWrap');
+  var searchInput = document.getElementById('playerListSearch');
+  var cardEl = document.getElementById('playerListCard');
+  var paginationEl = document.getElementById('playerListPagination');
+  var prevBtn = document.getElementById('playerListPrev');
+  var nextBtn = document.getElementById('playerListNext');
+  var pageInfoEl = document.getElementById('playerListPageInfo');
+
+  var state = {
+    page: 1,
+    q: '',
+    loading: false,
+  };
+  var searchTimer = null;
+
+  function escapeHtml(text) {
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function avatarHtml(player) {
+    if (player.avatar_url) {
+      return '<img src="' + escapeHtml(player.avatar_url) + '" alt="" class="player-avatar player-avatar-md player-avatar-img">';
+    }
+    var initial = player.display_name ? player.display_name.slice(0, 1) : '?';
+    return '<span class="player-avatar player-avatar-md">' + escapeHtml(initial) + '</span>';
+  }
+
+  function renderPlayers(data) {
+    if (!data.total && !state.q) {
+      searchWrap.hidden = true;
+      paginationEl.hidden = true;
+      subtitleEl.textContent = '共 0 人';
+      cardEl.innerHTML = '<div class="player-list-placeholder">暂无球员，创建活动并添加报名后会出现在这里</div>';
+      return;
+    }
+
+    searchWrap.hidden = false;
+    subtitleEl.textContent = '共 ' + data.total + ' 人 · 按参与次数排序';
+
+    if (!data.players.length) {
+      cardEl.innerHTML = '<div class="player-list-placeholder">没有匹配的球员</div>';
+    } else {
+      cardEl.innerHTML = data.players.map(function (p) {
+        var meta = p.nickname
+          ? '<div class="player-list-meta">' + escapeHtml(p.name) + '</div>'
+          : '';
+        return (
+          '<a href="' + escapeHtml(p.detail_url) + '" class="player-list-item">' +
+            avatarHtml(p) +
+            '<div class="player-list-info">' +
+              '<div class="player-list-name">' + escapeHtml(p.display_name) + '</div>' +
+              meta +
+            '</div>' +
+            '<span class="player-list-badge">' + p.session_count + ' 次</span>' +
+            '<span class="player-list-chevron">›</span>' +
+          '</a>'
+        );
+      }).join('');
+    }
+
+    if (data.num_pages > 1) {
+      paginationEl.hidden = false;
+      pageInfoEl.textContent = data.page + ' / ' + data.num_pages;
+      prevBtn.disabled = !data.has_previous;
+      nextBtn.disabled = !data.has_next;
+    } else {
+      paginationEl.hidden = true;
+    }
+  }
+
+  function syncUrl() {
+    var params = new URLSearchParams();
+    if (state.page > 1) params.set('page', state.page);
+    if (state.q) params.set('q', state.q);
+    var qs = params.toString();
+    history.replaceState(null, '', qs ? ('?' + qs) : window.location.pathname);
+  }
+
+  function loadPlayers(page) {
+    if (state.loading) return;
+    state.page = page || 1;
+    state.loading = true;
+    cardEl.innerHTML = '<div class="player-list-placeholder" id="playerListLoading">加载中…</div>';
+
+    var params = new URLSearchParams({ page: state.page });
+    if (state.q) params.set('q', state.q);
+
+    fetch(apiUrl + '?' + params.toString(), {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      credentials: 'same-origin',
+    }).then(function (resp) {
+      return resp.json();
+    }).then(function (data) {
+      state.loading = false;
+      renderPlayers(data);
+      syncUrl();
+    }).catch(function () {
+      state.loading = false;
+      subtitleEl.textContent = '加载失败';
+      cardEl.innerHTML = '<div class="player-list-placeholder">加载失败，请刷新重试</div>';
+    });
+  }
+
+  prevBtn.addEventListener('click', function () {
+    if (state.page > 1) loadPlayers(state.page - 1);
+  });
+
+  nextBtn.addEventListener('click', function () {
+    loadPlayers(state.page + 1);
+  });
+
+  searchInput.addEventListener('input', function () {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(function () {
+      state.q = searchInput.value.trim();
+      loadPlayers(1);
+    }, 400);
+  });
+
+  searchInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      clearTimeout(searchTimer);
+      state.q = searchInput.value.trim();
+      loadPlayers(1);
+    }
+  });
+
+  var initial = new URLSearchParams(window.location.search);
+  state.page = parseInt(initial.get('page') || '1', 10) || 1;
+  state.q = initial.get('q') || '';
+  if (state.q) searchInput.value = state.q;
+
+  loadPlayers(state.page);
+})();
+</script>
 {% endblock %}

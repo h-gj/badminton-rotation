@@ -1,0 +1,28 @@
+<div id="matchesPoster" class="matches-poster" aria-hidden="true">
+  <div class="matches-poster-shell">
+    <div class="matches-poster-header">
+      <h1 class="matches-poster-title">{{ session.title }}</h1>
+      <p class="matches-poster-subtitle">{{ session.event_time_label }}{% if session.location %} · {{ session.location }}{% endif %}</p>
+    </div>
+
+    <div class="matches-poster-body">
+      {% for round_num, round_matches in round_list %}
+      <div class="matches-poster-round">
+        <div class="matches-poster-round-title">第 {{ round_num }} 轮</div>
+        <div class="matches-poster-round-body">
+        {% for m in round_matches %}
+        <div class="matches-poster-item">
+          <div class="matches-poster-meta">第 {{ m.match_number }} 场 · {{ m.court_number }} 号场</div>
+          <div class="matches-poster-matchup">
+            <div class="matches-poster-team">{{ m.team1_player1.display_name }} / {{ m.team1_player2.display_name }}</div>
+            <div class="matches-poster-vs">VS</div>
+            <div class="matches-poster-team">{{ m.team2_player1.display_name }} / {{ m.team2_player2.display_name }}</div>
+          </div>
+        </div>
+        {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>

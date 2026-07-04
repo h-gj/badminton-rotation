@@ -1,0 +1,257 @@
+{% extends 'rotation/base.html' %}
+{% block title %}微信群截图导入{% endblock %}
+{% block content %}
+{% csrf_token %}
+<div class="import-page player-page" id="importPage"
+     data-parse-url="{% url 'session_import_wechat_parse' %}"
+     data-create-url="{% url 'session_import_wechat_create' %}">
+  <div class="player-page-header">
+    <h2 class="player-page-title">微信群截图导入</h2>
+    <p class="player-page-subtitle">上传微信群「聊天信息」截图，自动识别成员与时间地点</p>
+  </div>
+
+  {% if not vision_configured %}
+  <div class="alert alert-warning import-api-alert">
+    尚未配置视觉识别 API。请在 <code>.env</code> 中设置智谱 Key，或配置硅基流动 / 阿里云百炼备用 Key（见 <code>.env.example</code>）。
+  </div>
+  {% elif vision_providers|length > 1 %}
+  <div class="alert alert-info import-api-alert">
+    已配置 {{ vision_providers|length }} 个 API：{{ vision_providers|join:" → " }}（失败时自动切换）
+  </div>
+  {% endif %}
+
+  <div class="import-upload-card" id="importUploadSection">
+    <label class="import-upload-zone" id="importUploadZone">
+      <input type="file" id="importFileInput" accept="image/*" hidden>
+      <span class="import-upload-icon">📷</span>
+      <span class="import-upload-title">点击选择或拍照上传</span>
+      <span class="import-upload-hint">请使用微信群「聊天信息」页面截图，需包含成员头像和群聊名称</span>
+    </label>
+    <img id="importPreviewImg" class="import-preview-img" alt="" hidden>
+    <button type="button" class="btn btn-primary w-100 import-parse-btn" id="importParseBtn" disabled>
+      开始识别
+    </button>
+    <div class="import-error text-danger" id="importError" hidden></div>
+  </div>
+
+  <div class="import-result-card" id="importResultSection" hidden>
+    <div class="import-result-title">识别结果 · 确认后可修改</div>
+
+    <div class="import-form-group">
+      <label class="form-label" for="importGroupName">群聊名称</label>
+      <input type="text" class="form-control" id="importGroupName" readonly>
+    </div>
+
+    <div class="import-form-row">
+      <div class="import-form-group">
+        <label class="form-label" for="importEventDate">比赛日期</label>
+        <input type="date" class="form-control" id="importEventDate">
+      </div>
+      <div class="import-form-group">
+        <label class="form-label" for="importLocation">球馆/地点</label>
+        <input type="text" class="form-control" id="importLocation" placeholder="例如：荣达">
+      </div>
+    </div>
+
+    <div class="import-form-row">
+      <div class="import-form-group">
+        <label class="form-label" for="importStartTime">开始时间</label>
+        <input type="time" class="form-control" id="importStartTime">
+      </div>
+      <div class="import-form-group">
+        <label class="form-label" for="importEndTime">结束时间</label>
+        <input type="time" class="form-control" id="importEndTime">
+      </div>
+    </div>
+
+    <div class="import-form-group">
+      <label class="form-label" for="importNotes">备注</label>
+      <input type="text" class="form-control" id="importNotes" placeholder="群名中的其他说明">
+    </div>
+
+    <div class="import-form-group">
+      <label class="form-label" for="importMembers">球员昵称（每行一个，可编辑）</label>
+      <textarea class="form-control import-members-input" id="importMembers" rows="6"
+                placeholder="Gorgine&#10;毅哥"></textarea>
+      <div class="form-text" id="importMemberHint"></div>
+    </div>
+
+    <div class="import-actions">
+      <button type="button" class="btn btn-outline-secondary" id="importResetBtn">重新上传</button>
+      <button type="button" class="btn btn-primary" id="importCreateBtn">创建活动</button>
+    </div>
+    <div class="import-error text-danger" id="importCreateError" hidden></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var pageEl = document.getElementById('importPage');
+  if (!pageEl) return;
+
+  var parseUrl = pageEl.dataset.parseUrl;
+  var createUrl = pageEl.dataset.createUrl;
+  var csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+  csrfToken = csrfToken ? csrfToken.value : '';
+
+  var uploadSection = document.getElementById('importUploadSection');
+  var resultSection = document.getElementById('importResultSection');
+  var fileInput = document.getElementById('importFileInput');
+  var uploadZone = document.getElementById('importUploadZone');
+  var previewImg = document.getElementById('importPreviewImg');
+  var parseBtn = document.getElementById('importParseBtn');
+  var importError = document.getElementById('importError');
+  var createError = document.getElementById('importCreateError');
+  var createBtn = document.getElementById('importCreateBtn');
+  var resetBtn = document.getElementById('importResetBtn');
+  var memberHint = document.getElementById('importMemberHint');
+
+  var selectedFile = null;
+  var membersDetail = [];
+
+  function getCookie(name) {
+    var match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+    return match ? decodeURIComponent(match[1]) : '';
+  }
+
+  if (!csrfToken) csrfToken = getCookie('csrftoken');
+
+  function showError(el, msg) {
+    el.textContent = msg;
+    el.hidden = !msg;
+  }
+
+  function setLoading(loading) {
+    parseBtn.disabled = loading || !selectedFile;
+    parseBtn.textContent = loading ? '识别中…' : '开始识别';
+    createBtn.disabled = loading;
+    createBtn.textContent = loading ? '创建中…' : '创建活动';
+  }
+
+  fileInput.addEventListener('change', function () {
+    selectedFile = fileInput.files[0] || null;
+    showError(importError, '');
+    if (selectedFile) {
+      previewImg.src = URL.createObjectURL(selectedFile);
+      previewImg.hidden = false;
+      parseBtn.disabled = false;
+    } else {
+      previewImg.hidden = true;
+      parseBtn.disabled = true;
+    }
+  });
+
+  parseBtn.addEventListener('click', function () {
+    if (!selectedFile) return;
+    setLoading(true);
+    showError(importError, '');
+
+    var formData = new FormData();
+    formData.append('screenshot', selectedFile);
+
+    fetch(parseUrl, {
+      method: 'POST',
+      headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': csrfToken },
+      credentials: 'same-origin',
+      body: formData,
+    }).then(function (resp) {
+      return resp.json().then(function (data) {
+        if (!resp.ok) throw new Error(data.error || '识别失败');
+        return data;
+      });
+    }).then(function (resp) {
+      setLoading(false);
+      fillPreview(resp.data);
+      uploadSection.hidden = true;
+      resultSection.hidden = false;
+    }).catch(function (err) {
+      setLoading(false);
+      showError(importError, err.message || '识别失败');
+    });
+  });
+
+  function fillPreview(data) {
+    document.getElementById('importGroupName').value = data.group_name || '';
+    document.getElementById('importEventDate').value = data.event_date || '';
+    document.getElementById('importLocation').value = data.location || '';
+    document.getElementById('importStartTime').value = data.event_start_time || '';
+    document.getElementById('importEndTime').value = data.event_end_time || '';
+    document.getElementById('importNotes').value = data.notes || '';
+    membersDetail = data.members_detail || [];
+    document.getElementById('importMembers').value = (data.members || []).join('\n');
+
+    var matched = membersDetail.filter(function (m) { return m.matched; }).length;
+    var total = membersDetail.length;
+    if (total) {
+      memberHint.textContent = '共识别 ' + total + ' 人，其中 ' + matched + ' 人已匹配历史球员';
+    } else {
+      memberHint.textContent = '未识别到成员，请手动输入昵称';
+    }
+    showError(createError, '');
+  }
+
+  resetBtn.addEventListener('click', function () {
+    selectedFile = null;
+    fileInput.value = '';
+    previewImg.hidden = true;
+    parseBtn.disabled = true;
+    uploadSection.hidden = false;
+    resultSection.hidden = true;
+    showError(importError, '');
+    showError(createError, '');
+  });
+
+  createBtn.addEventListener('click', function () {
+    var members = document.getElementById('importMembers').value
+      .split(/\r?\n/)
+      .map(function (s) { return s.trim(); })
+      .filter(Boolean);
+
+    if (!document.getElementById('importEventDate').value) {
+      showError(createError, '请填写比赛日期');
+      return;
+    }
+    if (!members.length) {
+      showError(createError, '请至少添加一名球员');
+      return;
+    }
+
+    setLoading(true);
+    showError(createError, '');
+
+    var payload = {
+      group_name: document.getElementById('importGroupName').value.trim(),
+      event_date: document.getElementById('importEventDate').value,
+      event_start_time: document.getElementById('importStartTime').value,
+      event_end_time: document.getElementById('importEndTime').value,
+      location: document.getElementById('importLocation').value.trim(),
+      notes: document.getElementById('importNotes').value.trim(),
+      members: members,
+    };
+
+    fetch(createUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken': csrfToken,
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify(payload),
+    }).then(function (resp) {
+      return resp.json().then(function (data) {
+        if (!resp.ok) throw new Error(data.error || '创建失败');
+        return data;
+      });
+    }).then(function (resp) {
+      window.location.href = resp.redirect_url;
+    }).catch(function (err) {
+      setLoading(false);
+      showError(createError, err.message || '创建失败');
+    });
+  });
+})();
+</script>
+{% endblock %}

@@ -1,89 +1,91 @@
 {% extends 'rotation/base.html' %}
 {% block title %}{{ player.display_name }} - 统计{% endblock %}
 {% block content %}
-<h2 class="mb-1">{{ player.display_name }}</h2>
-<p class="text-muted mb-4">历史战绩统计</p>
+<div class="player-detail-page">
+  <div class="player-detail-header">
+    {% include 'rotation/includes/player_avatar.html' with player=player size='lg' %}
+    <div class="player-detail-heading">
+      <h2 class="player-detail-name">{{ player.display_name }}</h2>
+      {% if player.nickname %}
+      <p class="player-detail-subname">{{ player.name }}</p>
+      {% endif %}
+      {% if player.login_username %}
+      <p class="player-detail-login">登录用户名 {{ player.login_username }}</p>
+      {% endif %}
+      <p class="player-detail-desc">历史战绩统计</p>
+    </div>
+  </div>
 
-<div class="row g-3 mb-4">
-  <div class="col-md-3">
-    <div class="card text-center p-3">
-      <div class="fs-3 fw-bold text-success">{{ stats.total.wins }}</div>
-      <div class="text-muted">胜场</div>
+  <div class="player-stat-grid">
+    <div class="player-stat-item">
+      <div class="player-stat-value player-stat-win">{{ stats.total.wins }}</div>
+      <div class="player-stat-label">胜场</div>
+    </div>
+    <div class="player-stat-item">
+      <div class="player-stat-value player-stat-loss">{{ stats.total.losses }}</div>
+      <div class="player-stat-label">负场</div>
+    </div>
+    <div class="player-stat-item">
+      <div class="player-stat-value">{{ stats.total.matches }}</div>
+      <div class="player-stat-label">总场次</div>
+    </div>
+    <div class="player-stat-item">
+      <div class="player-stat-value player-stat-rate">{{ stats.total.win_rate }}%</div>
+      <div class="player-stat-label">总胜率</div>
     </div>
   </div>
-  <div class="col-md-3">
-    <div class="card text-center p-3">
-      <div class="fs-3 fw-bold text-danger">{{ stats.total.losses }}</div>
-      <div class="text-muted">负场</div>
-    </div>
-  </div>
-  <div class="col-md-3">
-    <div class="card text-center p-3">
-      <div class="fs-3 fw-bold">{{ stats.total.matches }}</div>
-      <div class="text-muted">总场次</div>
-    </div>
-  </div>
-  <div class="col-md-3">
-    <div class="card text-center p-3">
-      <div class="fs-3 fw-bold text-primary">{{ stats.total.win_rate }}%</div>
-      <div class="text-muted">总胜率</div>
-    </div>
-  </div>
-</div>
 
-<div class="card mb-4">
-  <div class="card-header fw-bold">搭档胜率</div>
-  <div class="table-responsive">
-    <table class="table table-hover mb-0">
-      <thead class="table-light">
-        <tr>
-          <th>搭档</th>
-          <th>胜/负</th>
-          <th>场次</th>
-          <th>胜率</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for p in stats.partners %}
-        <tr>
-          <td>{{ p.partner.display_name }}</td>
-          <td>{{ p.wins }}/{{ p.losses }}</td>
-          <td>{{ p.matches }}</td>
-          <td>{{ p.win_rate }}%</td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="4" class="text-center text-muted py-4">暂无搭档数据</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
+  <section class="player-detail-section">
+    <div class="player-detail-section-head">搭档胜率</div>
+    <div class="player-detail-card">
+      {% for p in stats.partners %}
+      <a href="{% url 'player_detail' p.partner.pk %}" class="player-partner-item">
+        {% include 'rotation/includes/player_avatar.html' with player=p.partner size='md' %}
+        <div class="player-partner-body">
+          <div class="player-partner-top">
+            <span class="player-partner-name">{{ p.partner.display_name }}</span>
+            <span class="player-partner-rate-text">{{ p.win_rate }}%</span>
+          </div>
+          <div class="player-partner-meta">
+            <span class="wl-win">{{ p.wins }}</span> 胜 ·
+            <span class="wl-loss">{{ p.losses }}</span> 负 ·
+            {{ p.matches }} 场
+          </div>
+          <div class="player-partner-bar" aria-hidden="true">
+            <div class="player-partner-bar-fill" style="width: {{ p.win_rate }}%"></div>
+          </div>
+        </div>
+        <span class="player-list-chevron">›</span>
+      </a>
+      {% empty %}
+      <div class="player-detail-empty">暂无搭档数据</div>
+      {% endfor %}
+    </div>
+  </section>
 
-<div class="card">
-  <div class="card-header fw-bold">各场次表现</div>
-  <div class="table-responsive">
-    <table class="table table-hover mb-0">
-      <thead class="table-light">
-        <tr>
-          <th>活动</th>
-          <th>日期</th>
-          <th>胜/负</th>
-          <th>场次</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for s in stats.sessions %}
-        <tr>
-          <td><a href="{% url 'session_detail' s.session.pk %}">{{ s.session.title }}</a></td>
-          <td>{{ s.session.event_date|date:"Y-m-d H:i" }}</td>
-          <td>{{ s.wins }}/{{ s.losses }}</td>
-          <td>{{ s.matches }}</td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="4" class="text-center text-muted py-4">暂无活动记录</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+  <section class="player-detail-section">
+    <div class="player-detail-section-head">各场次表现</div>
+    <div class="player-detail-card">
+      {% for s in stats.sessions %}
+      <a href="{% url 'session_detail' s.session.pk %}" class="player-session-item">
+        <div class="player-session-body">
+          <div class="player-session-title">{{ s.session.title }}</div>
+          <div class="player-session-meta">{{ s.session.event_time_label }}</div>
+          <div class="player-session-record">
+            <span class="wl-win">{{ s.wins }}</span> 胜 ·
+            <span class="wl-loss">{{ s.losses }}</span> 负 ·
+            {{ s.matches }} 场
+            {% if s.matches %}
+            · 胜率 {% widthratio s.wins s.matches 100 %}%
+            {% endif %}
+          </div>
+        </div>
+        <span class="player-list-chevron">›</span>
+      </a>
+      {% empty %}
+      <div class="player-detail-empty">暂无活动记录</div>
+      {% endfor %}
+    </div>
+  </section>
 </div>
 {% endblock %}
