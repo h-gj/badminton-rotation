@@ -173,6 +173,26 @@ Starting tunnel... Press Ctrl+C to stop
 
 在两个窗口分别按 `Ctrl+C`，或关闭窗口。
 
+### 方式 C：一键启动两个服务
+
+双击 **`start-all.bat`**：先启动 Django，等待约 15 秒后再启动 Tunnel（适合开机自启）。
+
+### 方式 D：开机自动启动
+
+1. 双击 **`scripts\install-startup.cmd`**
+2. 会在「启动」文件夹创建快捷方式，指向 `start-all.bat`
+3. **下次登录 Windows** 时会自动打开两个服务窗口
+
+取消自启：双击 **`scripts\uninstall-startup.cmd`**
+
+快捷方式位置：
+
+```
+%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\Yuzhuan Badminton.lnk
+```
+
+> 登录后需等 Django 完成 migrate / collectstatic（约 10–30 秒），外网才能稳定访问。若电脑刚开机网络未就绪，Tunnel 窗口可能短暂报错，一般会自动恢复；不行就手动再双击 `start-tunnel.bat`。
+
 ---
 
 ## 三、启动脚本说明
@@ -181,10 +201,13 @@ Starting tunnel... Press Ctrl+C to stop
 badminton-rotation/
 ├── start-django.bat          # 双击入口 → 调用 run-production.cmd
 ├── start-tunnel.bat          # 双击入口 → 调用 run-tunnel.cmd
+├── start-all.bat             # 一键启动 Django + Tunnel（含间隔等待）
 ├── scripts/
 │   ├── run-production.cmd    # pip install → migrate → collectstatic → waitress
 │   ├── run-production.ps1    # PowerShell 版（同上）
-│   └── run-tunnel.cmd        # cloudflared tunnel run
+│   ├── run-tunnel.cmd        # cloudflared tunnel run
+│   ├── install-startup.cmd   # 安装登录自启快捷方式
+│   └── uninstall-startup.cmd # 移除登录自启
 ├── deploy/
 │   └── cloudflared-config.example.yml
 └── .env                      # 环境变量（勿提交到 Git）

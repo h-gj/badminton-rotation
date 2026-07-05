@@ -24,17 +24,10 @@ _allowed = [
     if host.strip()
 ]
 ALLOWED_HOSTS = _allowed or (['*'] if DEBUG else [])
+print(ALLOWED_HOSTS, DEBUG)
 
-CSRF_TRUSTED_ORIGINS = [
-    origin.strip()
-    for origin in os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',')
-    if origin.strip()
-]
-if DEBUG and not CSRF_TRUSTED_ORIGINS:
-    CSRF_TRUSTED_ORIGINS = [
-        'http://localhost:8000',
-        'http://127.0.0.1:8000',
-    ]
+CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',')
+print(CSRF_TRUSTED_ORIGINS)
 
 INSTALLED_APPS = [
     'django.contrib.admin',
