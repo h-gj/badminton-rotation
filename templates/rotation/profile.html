@@ -115,7 +115,7 @@
     <button type="button" class="btn btn-outline-primary btn-lg" id="copyInviteCodeBtn">复制邀请码</button>
     {% endif %}
     {% if not club and not is_admin %}
-    <a href="{% url 'club_setup' %}" class="btn btn-outline-primary btn-lg">创建或加入俱乐部</a>
+    <a href="{% url 'club_home' %}" class="btn btn-outline-primary btn-lg">创建或加入俱乐部</a>
     {% endif %}
     <a href="{% url 'logout' %}" class="btn btn-outline-secondary btn-lg">退出登录</a>
   </div>

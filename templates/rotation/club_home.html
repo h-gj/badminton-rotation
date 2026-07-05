@@ -1,0 +1,54 @@
+{% extends 'rotation/base.html' %}
+{% block title %}俱乐部 - 羽转{% endblock %}
+{% block content %}
+<div class="session-page club-home-page">
+  {% if needs_setup %}
+  <div class="auth-card">
+    <h2 class="auth-title">加入羽转</h2>
+    <p class="auth-subtitle">创建新俱乐部，或从列表中加入已有俱乐部，二选一即可开始使用</p>
+    <div class="club-setup-actions">
+      <a href="{% url 'club_create' %}" class="club-setup-option">
+        <span class="club-setup-option-icon">🏸</span>
+        <span class="club-setup-option-title">创建俱乐部</span>
+        <span class="club-setup-option-desc">我是组织者，新建一个俱乐部</span>
+      </a>
+      <a href="{% url 'club_join' %}" class="club-setup-option">
+        <span class="club-setup-option-icon">🤝</span>
+        <span class="club-setup-option-title">加入俱乐部</span>
+        <span class="club-setup-option-desc">从列表中选择已有俱乐部加入</span>
+      </a>
+    </div>
+  </div>
+  {% else %}
+  {% include 'rotation/includes/club_header.html' %}
+  {% include 'rotation/includes/club_tabs.html' %}
+
+  {% if club and club_info %}
+  <div class="club-home-info">
+    <div class="club-home-info-row">
+      <span class="club-home-info-label">创建时间</span>
+      <span class="club-home-info-value">{{ club_info.created_at|date:"Y-m-d H:i" }}</span>
+    </div>
+    <div class="club-home-info-row">
+      <span class="club-home-info-label">创建人</span>
+      <span class="club-home-info-value">{{ club_info.owner_display }}</span>
+    </div>
+    <div class="club-home-info-row">
+      <span class="club-home-info-label">成员数</span>
+      <span class="club-home-info-value">{{ club_info.member_count }} 人</span>
+    </div>
+    {% if owned_club %}
+    <div class="club-home-info-row">
+      <span class="club-home-info-label">邀请码</span>
+      <span class="club-home-info-value profile-invite-code">{{ owned_club.invite_code }}</span>
+    </div>
+    <div class="club-home-info-row">
+      <span class="club-home-info-label">成员登录规则</span>
+      <span class="club-home-info-value">{{ owned_club.invite_code|lower }}_姓名拼音</span>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

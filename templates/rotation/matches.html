@@ -211,8 +211,24 @@
   </div>
 </div>
 
+<div class="modal fade session-confirm-modal" id="scoreModifyConfirmModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title w-100 text-center fw-bold">修改比分</h5>
+      </div>
+      <div class="modal-body pt-2">
+        <p class="text-center text-muted mb-0">是否确定修改比分？</p>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-light flex-fill" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-primary flex-fill" id="scoreModifyConfirmOk">确定</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
-var CONFIRM_MODIFY_MSG = '是否确定修改比分？';
 var CAN_SCORE = document.querySelector('.session-matches-page')?.dataset.canScore === '1';
 
 function getCsrfToken() {
@@ -236,8 +252,55 @@ function canSubmitScore(s1, s2) {
   return s1 !== '' && s2 !== '';
 }
 
+var scoreModifyPendingAction = null;
+var scoreModifyConfirmOk = false;
+var scoreModifyConfirmModalEl = document.getElementById('scoreModifyConfirmModal');
+
+function getScoreModifyConfirmModal() {
+  if (!scoreModifyConfirmModalEl || typeof bootstrap === 'undefined') {
+    return null;
+  }
+  return bootstrap.Modal.getOrCreateInstance(scoreModifyConfirmModalEl);
+}
+
+function showScoreModifyConfirm(onConfirm) {
+  var modal = getScoreModifyConfirmModal();
+  if (!modal) {
+    onConfirm();
+    return;
+  }
+  scoreModifyPendingAction = onConfirm;
+  scoreModifyConfirmOk = false;
+  modal.show();
+}
+
+if (scoreModifyConfirmModalEl) {
+  document.getElementById('scoreModifyConfirmOk').addEventListener('click', function () {
+    if (!scoreModifyPendingAction) {
+      return;
+    }
+    scoreModifyConfirmOk = true;
+    var modal = getScoreModifyConfirmModal();
+    if (modal) {
+      modal.hide();
+    }
+  });
+  scoreModifyConfirmModalEl.addEventListener('hidden.bs.modal', function () {
+    if (scoreModifyConfirmOk && scoreModifyPendingAction) {
+      var action = scoreModifyPendingAction;
+      scoreModifyPendingAction = null;
+      scoreModifyConfirmOk = false;
+      action();
+      return;
+    }
+    scoreModifyPendingAction = null;
+    scoreModifyConfirmOk = false;
+  });
+}
+
 function confirmIfCompleted(isCompleted, action) {
-  if (isCompleted && !confirm(CONFIRM_MODIFY_MSG)) {
+  if (isCompleted) {
+    showScoreModifyConfirm(action);
     return;
   }
   action();
@@ -499,15 +562,6 @@ scoreModal.addEventListener('show.bs.modal', function (event) {
 });
 
 document.querySelector('.session-matches-page').addEventListener('click', function (e) {
-  var openBtn = e.target.closest('.match-score-open');
-  if (openBtn) {
-    var box = openBtn.closest('.match-score-box');
-    if (box && box.dataset.completed === '1' && !confirm(CONFIRM_MODIFY_MSG)) {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-    }
-    return;
-  }
   var swapBtn = e.target.closest('.card-score-swap');
   if (swapBtn) {
     var scoreBox = swapBtn.closest('.match-score-box');
@@ -515,14 +569,12 @@ document.querySelector('.session-matches-page').addEventListener('click', functi
       submitQuickForm(scoreBox, swapBtn.dataset.s2, swapBtn.dataset.s1);
     });
   }
-}, true);
+});
 
 document.getElementById('scoreModalSwap').addEventListener('click', function () {
-  confirmIfCompleted(modalEditingCompleted, function () {
-    var tmp = scoreModalS1.value;
-    scoreModalS1.value = scoreModalS2.value;
-    scoreModalS2.value = tmp;
-  });
+  var tmp = scoreModalS1.value;
+  scoreModalS1.value = scoreModalS2.value;
+  scoreModalS2.value = tmp;
 });
 
 [scoreModalS1, scoreModalS2].forEach(function (input) {
@@ -611,7 +663,6 @@ document.querySelectorAll('.match-score-inline-form .match-score-input').forEach
 });
 </script>
 {% endblock %}
-
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 {% include 'rotation/includes/poster_save_script.html' %}

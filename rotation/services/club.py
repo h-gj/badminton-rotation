@@ -87,3 +87,38 @@ def user_can_access_player(user, player):
     if not club or not player.club_id:
         return False
     return player.club_id == club.pk
+
+
+def _club_owner_display(club):
+    player = Player.objects.filter(user=club.owner, club=club).first()
+    if player:
+        return player.display_name
+    full_name = club.owner.get_full_name()
+    return full_name or club.owner.username
+
+
+def _club_member_count(club):
+    count = club.memberships.count()
+    if not club.memberships.filter(user_id=club.owner_id).exists():
+        count += 1
+    return count
+
+
+def get_club_page_context(user):
+    club = get_user_club(user)
+    admin = is_site_admin(user)
+    owned_club = Club.objects.filter(owner=user).first() if user.is_authenticated else None
+    club_info = None
+    if club:
+        club = Club.objects.select_related('owner').get(pk=club.pk)
+        club_info = {
+            'created_at': club.created_at,
+            'owner_display': _club_owner_display(club),
+            'member_count': _club_member_count(club),
+        }
+    return {
+        'club': club,
+        'club_info': club_info,
+        'owned_club': owned_club,
+        'is_admin': admin,
+    }

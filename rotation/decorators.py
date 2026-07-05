@@ -23,7 +23,7 @@ def require_club(view):
     def wrapper(request, *args, **kwargs):
         if not request.club and not is_site_admin(request.user):
             messages.info(request, '请先创建或加入俱乐部')
-            return redirect('club_setup')
+            return redirect('club_home')
         return view(request, *args, **kwargs)
 
     return wrapper

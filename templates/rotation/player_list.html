@@ -1,11 +1,12 @@
 {% extends 'rotation/base.html' %}
 {% block title %}球员列表{% endblock %}
 {% block content %}
-<div class="player-page" id="playerListPage" data-api-url="{% url 'player_list' %}">
-  <div class="player-page-header">
-    <h2 class="player-page-title">球员列表</h2>
-    <p class="player-page-subtitle" id="playerListSubtitle">加载中…</p>
-  </div>
+<div class="session-page club-home-page">
+  {% include 'rotation/includes/club_header.html' %}
+  {% include 'rotation/includes/club_tabs.html' %}
+
+  <div class="player-page" id="playerListPage" data-api-url="{% url 'player_list' %}">
+    <p class="player-page-subtitle club-section-subtitle" id="playerListSubtitle">加载中…</p>
 
   <div class="player-list-search-wrap" id="playerListSearchWrap" hidden>
     <input type="search" id="playerListSearch" class="form-control player-list-search"
@@ -21,6 +22,7 @@
     <span class="player-list-page-info" id="playerListPageInfo">1 / 1</span>
     <button type="button" class="player-list-page-btn" id="playerListNext" disabled>下一页</button>
   </nav>
+  </div>
 </div>
 {% endblock %}
 

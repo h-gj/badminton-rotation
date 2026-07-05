@@ -1,13 +1,14 @@
 {% extends 'rotation/base.html' %}
 {% block title %}排行榜{% endblock %}
 {% block content %}
-<div class="rankings-page player-page" id="rankingsPage"
-     data-api-url="{% url 'rankings' %}"
-     data-initial-tab="{{ tab }}">
-  <div class="player-page-header">
-    <h2 class="player-page-title">排行榜</h2>
-    <p class="player-page-subtitle" id="rankingsSubtitle">加载中…</p>
-  </div>
+<div class="session-page club-home-page">
+  {% include 'rotation/includes/club_header.html' %}
+  {% include 'rotation/includes/club_tabs.html' %}
+
+  <div class="rankings-page player-page" id="rankingsPage"
+       data-api-url="{% url 'rankings' %}"
+       data-initial-tab="{{ tab }}">
+    <p class="player-page-subtitle club-section-subtitle" id="rankingsSubtitle">加载中…</p>
 
   <div class="session-tabs rankings-tabs" id="rankingsTabs" role="tablist">
     <a href="#" class="session-tab rankings-tab{% if tab == 'win_rate' %} active{% endif %}"
@@ -32,6 +33,7 @@
     <span class="player-list-page-info" id="rankingsPageInfo">1 / 1</span>
     <button type="button" class="player-list-page-btn" id="rankingsNext" disabled>下一页</button>
   </nav>
+  </div>
 </div>
 {% endblock %}
 

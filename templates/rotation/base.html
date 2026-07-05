@@ -219,6 +219,67 @@
       font-size: .8125rem;
       color: #666;
     }
+    .club-home-page {
+      max-width: 520px;
+      margin: 0 auto;
+      padding-top: .25rem;
+    }
+    .club-home-header {
+      margin-bottom: 1rem;
+    }
+    .club-home-info {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 1px 8px rgba(0,0,0,.06);
+      padding: .875rem 1rem;
+      margin-bottom: 1rem;
+    }
+    .club-home-info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: .75rem;
+      padding: .375rem 0;
+      font-size: .875rem;
+    }
+    .club-home-info-row + .club-home-info-row {
+      border-top: 1px solid #f0f0f0;
+      margin-top: .375rem;
+      padding-top: .75rem;
+    }
+    .club-home-info-label {
+      color: #888;
+      flex-shrink: 0;
+    }
+    .club-home-info-value {
+      color: #222;
+      font-weight: 600;
+      text-align: right;
+      word-break: break-all;
+    }
+    .club-home-actions {
+      display: flex;
+      flex-direction: column;
+      gap: .75rem;
+    }
+    .club-section-subtitle {
+      margin: 0 0 .75rem;
+    }
+    .club-tabs {
+      margin-bottom: 1rem;
+    }
+    .club-back-link {
+      display: inline-flex;
+      align-items: center;
+      margin-bottom: .75rem;
+      font-size: .875rem;
+      font-weight: 600;
+      color: #0d6efd;
+      text-decoration: none;
+    }
+    .club-back-link:active {
+      opacity: .75;
+    }
     .card { border: none; box-shadow: 0 2px 12px rgba(0,0,0,.06); }
     .badge-status-open { background: #198754; }
     .badge-status-scheduled { background: #0dcaf0; color: #000; }
@@ -2340,13 +2401,13 @@
       {% if user.is_authenticated %}
       <nav class="app-shell-tabs" aria-label="主导航">
         <a href="{% url 'session_list' %}"
-           class="app-shell-tab{% if '/rankings' not in request.path and '/players' not in request.path and '/sessions/create' not in request.path and '/club/' not in request.path and request.path == '/' or '/sessions' in request.path and '/sessions/create' not in request.path %} is-active{% endif %}">活动</a>
-        <a href="{% url 'rankings' %}"
-           class="app-shell-tab{% if '/rankings' in request.path %} is-active{% endif %}">排行</a>
-        <a href="{% url 'player_list' %}"
-           class="app-shell-tab{% if '/players' in request.path %} is-active{% endif %}">球员</a>
-        <a href="{% if can_create_session %}{% url 'session_create' %}{% else %}{% url 'club_setup' %}{% endif %}"
-           class="app-shell-tab app-shell-tab--accent{% if '/sessions/create' in request.path or '/club/' in request.path %} is-active{% endif %}">{% if can_create_session %}新建{% else %}俱乐部{% endif %}</a>
+           class="app-shell-tab{% if nav_active_sessions %} is-active{% endif %}">活动</a>
+        <a href="{% url 'club_home' %}"
+           class="app-shell-tab{% if nav_active_club %} is-active{% endif %}">俱乐部</a>
+        {% if can_create_session %}
+        <a href="{% url 'session_create' %}"
+           class="app-shell-tab app-shell-tab--accent{% if nav_active_create %} is-active{% endif %}">新建</a>
+        {% endif %}
       </nav>
       {% else %}
       <p class="app-shell-guest-tagline">羽毛球双打轮转 · 报名排阵计分</p>

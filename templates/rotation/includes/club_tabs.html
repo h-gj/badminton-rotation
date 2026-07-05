@@ -1,0 +1,8 @@
+<nav class="session-tabs club-tabs mb-3" aria-label="俱乐部导航">
+  <a href="{% url 'club_home' %}"
+     class="session-tab{% if club_tab == 'overview' %} active{% endif %}">概览</a>
+  <a href="{% url 'rankings' %}"
+     class="session-tab{% if club_tab == 'rankings' %} active{% endif %}">排行榜</a>
+  <a href="{% url 'player_list' %}"
+     class="session-tab{% if club_tab == 'players' %} active{% endif %}">球员</a>
+</nav>

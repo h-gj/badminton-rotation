@@ -7,7 +7,7 @@ from rotation.decorators import login_required_view
 from rotation.forms import PlayerAvatarForm
 from rotation.forms_auth import ClubForm, ClubJoinForm, LoginForm, RegisterForm
 from rotation.models import Club, ClubMembership, Player
-from rotation.services.club import get_user_club, is_site_admin, user_has_club, user_owns_club
+from rotation.services.club import get_user_club, get_club_page_context, is_site_admin, user_has_club, user_owns_club
 from rotation.services.stats import compute_player_stats
 
 
@@ -36,14 +36,14 @@ def _redirect_after_club_action(request):
         require_https=request.is_secure(),
     ):
         return redirect(next_url)
-    return redirect('home')
+    return redirect('club_home')
 
 
 def _redirect_after_login(request, user):
     if not user_has_club(user) and not is_site_admin(user):
         _stash_post_club_next(request)
         messages.info(request, '请先创建或加入俱乐部')
-        return redirect('club_setup')
+        return redirect('club_home')
     next_url = _safe_next_url(request)
     if next_url:
         return redirect(next_url)
@@ -60,7 +60,7 @@ def register(request):
             user = form.save()
             login(request, user)
             messages.success(request, '注册成功，请创建或加入俱乐部')
-            return redirect('club_setup')
+            return redirect('club_home')
     else:
         form = RegisterForm()
 
@@ -175,9 +175,22 @@ def profile_update_avatar(request):
 
 
 @login_required_view
+def club_home(request):
+    club = get_user_club(request.user)
+    admin = is_site_admin(request.user)
+    if not club and not admin:
+        return render(request, 'rotation/club_home.html', {'needs_setup': True})
+
+    return render(request, 'rotation/club_home.html', {
+        'club_tab': 'overview',
+        **get_club_page_context(request.user),
+    })
+
+
+@login_required_view
 def club_setup(request):
     if user_has_club(request.user) or is_site_admin(request.user):
-        return redirect('home')
+        return redirect('club_home')
 
     return render(request, 'rotation/club_setup.html', {
         'next_url': request.GET.get('next', ''),
@@ -188,7 +201,7 @@ def club_setup(request):
 def club_create(request):
     if user_has_club(request.user):
         messages.info(request, f'你已在俱乐部「{get_user_club(request.user).name}」中')
-        return redirect('home')
+        return redirect('club_home')
 
     if request.method == 'POST':
         form = ClubForm(request.POST)
@@ -208,11 +221,11 @@ def club_create(request):
 def club_join(request):
     if user_has_club(request.user):
         messages.info(request, f'你已在俱乐部「{get_user_club(request.user).name}」中')
-        return redirect('home')
+        return redirect('club_home')
 
     if user_owns_club(request.user):
         messages.error(request, '你已创建俱乐部，无法再加入其他俱乐部')
-        return redirect('home')
+        return redirect('club_home')
 
     if request.method == 'POST':
         form = ClubJoinForm(user=request.user, data=request.POST)

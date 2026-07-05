@@ -30,6 +30,7 @@ from rotation.models import Match, Player, Registration, Session
 from rotation.services.round_options import pick_default_rounds, recommend_round_options
 from rotation.services.club import (
     get_user_club,
+    get_club_page_context,
     is_site_admin,
     user_club_scope,
     user_player_queryset,
@@ -496,7 +497,7 @@ def match_score(request, pk):
         if is_ajax:
             return JsonResponse({'ok': False, 'errors': ['请先创建或加入俱乐部']}, status=403)
         messages.info(request, '请先创建或加入俱乐部，才能录入比分')
-        return redirect('club_setup')
+        return redirect('club_home')
 
     if session.club_id != club.pk:
         if is_ajax:
@@ -653,7 +654,11 @@ def rankings(request):
             payload['total_sessions'] = total_sessions
         return JsonResponse(payload)
 
-    return render(request, 'rotation/rankings.html', {'tab': tab})
+    return render(request, 'rotation/rankings.html', {
+        'tab': tab,
+        'club_tab': 'rankings',
+        **get_club_page_context(request.user),
+    })
 
 
 @require_club
@@ -678,7 +683,10 @@ def player_list(request):
             'next_page': page_obj.next_page_number() if page_obj.has_next() else None,
             'players': [_serialize_player(p, request) for p in page_obj],
         })
-    return render(request, 'rotation/player_list.html')
+    return render(request, 'rotation/player_list.html', {
+        'club_tab': 'players',
+        **get_club_page_context(request.user),
+    })
 
 
 @require_club

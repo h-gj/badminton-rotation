@@ -1,0 +1,8 @@
+<div class="club-home-header">
+  <h2 class="player-page-title">俱乐部</h2>
+  {% if club %}
+  <p class="player-page-subtitle">{{ club.name }}</p>
+  {% elif is_admin %}
+  <p class="player-page-subtitle">管理员视图 · 全部俱乐部</p>
+  {% endif %}
+</div>

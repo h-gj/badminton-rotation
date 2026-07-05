@@ -2,6 +2,7 @@
 {% block title %}{{ player.display_name }} - 统计{% endblock %}
 {% block content %}
 <div class="player-detail-page">
+  <a href="{% url 'player_list' %}" class="club-back-link">← 球员</a>
   <div class="player-detail-header">
     {% include 'rotation/includes/player_avatar.html' with player=player size='lg' %}
     <div class="player-detail-heading">
