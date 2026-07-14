@@ -2,6 +2,7 @@ from django.urls import path
 
 from rotation import views
 from rotation import views_auth
+from rotation import views_manage
 
 urlpatterns = [
     path('', views.home, name='home'),
@@ -10,6 +11,7 @@ urlpatterns = [
     path('accounts/logout/', views_auth.logout_view, name='logout'),
     path('accounts/profile/', views_auth.profile, name='profile'),
     path('accounts/profile/avatar/', views_auth.profile_update_avatar, name='profile_update_avatar'),
+    path('accounts/profile/gender/', views_auth.profile_update_gender, name='profile_update_gender'),
     path('club/', views_auth.club_home, name='club_home'),
     path('club/setup/', views_auth.club_setup, name='club_setup'),
     path('club/create/', views_auth.club_create, name='club_create'),
@@ -25,10 +27,22 @@ urlpatterns = [
     path('sessions/<int:pk>/register/', views.session_register, name='session_register'),
     path('sessions/<int:pk>/generate/', views.session_generate, name='session_generate'),
     path('sessions/<int:pk>/matches/', views.session_matches, name='session_matches'),
+    path('sessions/<int:pk>/matches/share/<str:token>/', views.session_matches_share, name='session_matches_share'),
     path('sessions/<int:pk>/leaderboard/', views.session_leaderboard, name='session_leaderboard'),
     path('matches/<int:pk>/score/', views.match_score, name='match_score'),
+    path('matches/<int:pk>/score/share/<str:token>/', views.match_score_share, name='match_score_share'),
     path('club/rankings/', views.rankings, name='rankings'),
     path('club/players/', views.player_list, name='player_list'),
     path('club/players/<int:pk>/', views.player_detail, name='player_detail'),
+    path('club/players/<int:pk>/matches/', views.player_matches, name='player_matches'),
     path('club/players/<int:pk>/avatar/', views.player_update_avatar, name='player_update_avatar'),
+    path('manage/', views_manage.manage_dashboard, name='manage_dashboard'),
+    path('manage/clubs/', views_manage.manage_club_list, name='manage_club_list'),
+    path('manage/clubs/create/', views_manage.manage_club_create, name='manage_club_create'),
+    path('manage/clubs/<int:pk>/edit/', views_manage.manage_club_edit, name='manage_club_edit'),
+    path('manage/players/', views_manage.manage_player_list, name='manage_player_list'),
+    path('manage/players/create/', views_manage.manage_player_create, name='manage_player_create'),
+    path('manage/players/<int:pk>/edit/', views_manage.manage_player_edit, name='manage_player_edit'),
+    path('manage/players/<int:pk>/enable-account/', views_manage.manage_player_enable_account, name='manage_player_enable_account'),
+    path('manage/players/<int:pk>/password/', views_manage.manage_player_password, name='manage_player_password'),
 ]

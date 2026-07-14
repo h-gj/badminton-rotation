@@ -46,6 +46,9 @@
       <span class="club-home-info-label">成员登录规则</span>
       <span class="club-home-info-value">{{ owned_club.invite_code|lower }}_姓名拼音</span>
     </div>
+    <div class="club-home-manage-link">
+      <a href="{% url 'manage_dashboard' %}" class="btn btn-outline-primary btn-sm w-100">进入管理后台</a>
+    </div>
     {% endif %}
   </div>
   {% endif %}

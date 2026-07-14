@@ -1,0 +1,39 @@
+{% extends 'rotation/base.html' %}
+{% block title %}{{ player.display_name }} - 对局记录{% endblock %}
+{% block content %}
+<div class="session-page player-matches-page">
+  <a href="{{ back_url }}" class="club-back-link">← {{ back_label }}</a>
+
+  <div class="session-info-card player-matches-header">
+    <div class="session-info-title">{{ player.display_name }} 的对局记录</div>
+    <p class="player-matches-subtitle">
+      {{ counts.win }} 胜 · {{ counts.loss }} 负 · 共 {{ counts.all }} 场
+    </p>
+  </div>
+
+  <nav class="session-tabs player-matches-tabs mb-3" aria-label="对局筛选">
+    {% for key, label in filter_labels.items %}
+    <a href="{% url 'player_matches' player.pk %}?result={{ key }}"
+       class="session-tab{% if result == key %} active{% endif %}">{{ label }}</a>
+    {% endfor %}
+  </nav>
+
+  {% for group in session_groups %}
+  <a href="{% url 'session_matches' group.session.pk %}" class="player-matches-session-card">
+    <div class="player-matches-session-title">{{ group.session.title }}</div>
+    <div class="player-matches-session-meta">{{ group.session.event_time_label }}</div>
+    <div class="player-matches-session-count">{{ group.matches|length }} 场 · 查看活动</div>
+  </a>
+
+  {% for entry in group.matches %}
+  {% include 'rotation/includes/player_match_card.html' with entry=entry subject_player=player %}
+  {% endfor %}
+  {% empty %}
+  <div class="player-list-placeholder">
+    {% if result == 'win' %}暂无胜场记录
+    {% elif result == 'loss' %}暂无负场记录
+    {% else %}暂无对局记录{% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -6,7 +6,7 @@ from rotation.services.round_options import (
     is_balanced_schedule,
     recommend_round_options,
 )
-from rotation.services.scheduler import RotationScheduler
+from rotation.services.scheduler import RotationScheduler, _pair_key
 
 
 class RoundOptionsTests(TestCase):
@@ -70,3 +70,34 @@ class SchedulerTests(TestCase):
         self.assertEqual(len(matches), 48)
         self.assertEqual(len(set(scheduler.play_count.values())), 1)
         self.assertEqual(scheduler.play_count[1], 16)
+
+    def test_six_players_fifteen_rounds_balanced_partners(self):
+        for player_ids in (list(range(1, 7)), list(range(45, 51))):
+            with self.subTest(player_ids=player_ids[0]):
+                scheduler = RotationScheduler(player_ids, courts=2, rounds=15)
+                scheduler.generate()
+                self.assertEqual(set(scheduler.partner_count.values()), {2})
+                self.assertEqual(len(scheduler.partner_count), 15)
+                if 49 in player_ids:
+                    self.assertEqual(scheduler.partner_count[_pair_key(49, 50)], 2)
+
+    def test_balanced_partner_counts_for_feasible_configs(self):
+        configs = (
+            (5, 5, 1),
+            (5, 10, 2),
+            (6, 15, 2),
+            (8, 14, 2),
+        )
+        for player_count, rounds, target in configs:
+            with self.subTest(player_count=player_count, rounds=rounds):
+                scheduler = RotationScheduler(
+                    list(range(1, player_count + 1)),
+                    courts=2,
+                    rounds=rounds,
+                )
+                scheduler.generate()
+                self.assertEqual(set(scheduler.partner_count.values()), {target})
+                self.assertEqual(
+                    len(scheduler.partner_count),
+                    player_count * (player_count - 1) // 2,
+                )

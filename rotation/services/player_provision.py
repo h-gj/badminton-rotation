@@ -55,6 +55,21 @@ def _create_club_member_user(club, display_name):
     return user
 
 
+def provision_player_login(player):
+    """
+    为已有球员开通登录账号并绑定。
+    返回登录用户名。
+    """
+    if player.user_id:
+        raise ValueError('该球员已有登录账号')
+    if not player.club_id:
+        raise ValueError('球员未归属俱乐部，无法开通账号')
+    user = _create_club_member_user(player.club, player.name)
+    player.user = user
+    player.save(update_fields=['user'])
+    return user.username
+
+
 def find_club_player(club, name, nickname=''):
     """在本俱乐部按姓名/昵称查找球员。"""
     if not club:
@@ -68,6 +83,38 @@ def find_club_player(club, name, nickname=''):
     if nickname:
         return Player.objects.filter(club=club, nickname=nickname).first()
     return None
+
+
+def create_club_player(club, name, nickname='', gender='', phone='', create_account=True):
+    """
+    在本俱乐部新建球员。
+    若 create_account 为 True，同时创建登录用户并加入俱乐部。
+    返回 (player, login_username)。
+    """
+    if not club:
+        raise ValueError('缺少俱乐部')
+    name = (name or '').strip()
+    nickname = (nickname or '').strip()
+    if not name:
+        raise ValueError('姓名不能为空')
+    if find_club_player(club, name, nickname):
+        raise ValueError('该俱乐部已有同名或同昵称球员')
+
+    user = None
+    login_username = ''
+    if create_account:
+        user = _create_club_member_user(club, name)
+        login_username = user.username
+
+    player = Player.objects.create(
+        club=club,
+        name=name,
+        nickname=nickname,
+        gender=gender or '',
+        phone=phone or '',
+        user=user,
+    )
+    return player, login_username
 
 
 def get_or_create_club_player(club, name, nickname=''):

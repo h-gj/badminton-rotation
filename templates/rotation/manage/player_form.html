@@ -1,0 +1,55 @@
+{% extends 'rotation/base.html' %}
+{% block title %}{{ title }} - 管理后台{% endblock %}
+{% block content %}
+<div class="session-page manage-page">
+  <div class="manage-header">
+    <h1 class="manage-title">{{ title }}</h1>
+  </div>
+  {% include 'rotation/includes/manage_tabs.html' %}
+
+  {% if player %}
+  <div class="profile-card mb-3">
+    <div class="profile-info-row">
+      <span class="profile-info-label">所属俱乐部</span>
+      <span class="profile-info-value">{{ player.club.name|default:'—' }}</span>
+    </div>
+    {% if player.user %}
+    <div class="profile-info-row">
+      <span class="profile-info-label">登录用户名</span>
+      <span class="profile-info-value">@{{ player.user.username }}</span>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <div class="auth-card">
+    <form method="post" class="auth-form" enctype="multipart/form-data">
+      {% csrf_token %}
+      {% for field in form %}
+      <div class="mb-3{% if field.field.widget.input_type == 'checkbox' %} form-check{% endif %}">
+        {% if field.field.widget.input_type == 'checkbox' %}
+        {{ field }}
+        <label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+        {% else %}
+        <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+        {{ field }}
+        {% endif %}
+        {% if field.help_text %}
+        <div class="form-text">{{ field.help_text }}</div>
+        {% endif %}
+        {% if field.errors %}
+        <div class="text-danger small">{{ field.errors.0 }}</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+      <button type="submit" class="btn btn-primary btn-lg w-100 auth-submit">保存</button>
+    </form>
+    <p class="auth-switch">
+      <a href="{% url 'manage_player_list' %}">返回球员列表</a>
+      {% if player and player.user %}
+      · <a href="{% url 'manage_player_password' player.pk %}">修改密码</a>
+      {% endif %}
+    </p>
+  </div>
+</div>
+{% endblock %}

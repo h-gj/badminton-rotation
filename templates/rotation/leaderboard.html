@@ -4,6 +4,16 @@
 <div class="session-page session-leaderboard-page">
   {% include 'rotation/includes/session_tabs.html' with active_tab='leaderboard' %}
 
+  {% if session_is_completed %}
+  <div class="session-info-card leaderboard-status-card mb-3">
+    <div class="leaderboard-ended-note">比赛已结束</div>
+  </div>
+  {% elif participant_remaining %}
+  <div class="session-info-card leaderboard-status-card mb-3">
+    <div class="leaderboard-remaining-note">你还有 {{ participant_remaining }} 场未完成</div>
+  </div>
+  {% endif %}
+
   <div class="leaderboard-card mb-3">
     <table class="table leaderboard-table">
       <thead>
@@ -39,7 +49,11 @@
           </td>
           <td>
             <div class="leaderboard-player-cell">
-              {% include 'rotation/includes/player_avatar.html' with player=row.player size='md' %}
+              <a href="{% url 'session_matches' session.pk %}?player={{ row.player.pk }}"
+                 class="leaderboard-player-avatar-link"
+                 title="查看对局">
+                {% include 'rotation/includes/player_avatar.html' with player=row.player size='md' %}
+              </a>
               <a href="{% url 'player_detail' row.player.pk %}" class="leaderboard-player-name">
                 {{ row.player.display_name }}
               </a>

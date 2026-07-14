@@ -1,0 +1,9 @@
+<div class="match-player" data-player-id="{{ player.pk }}">
+  <button type="button" class="match-player-avatar-filter"
+          data-player-id="{{ player.pk }}"
+          data-player-name="{{ player.display_name }}"
+          title="只看 {{ player.display_name }} 的对阵">
+    {% include 'rotation/includes/player_avatar.html' with player=player size='sm' %}
+  </button>
+  <span class="match-player-name" title="{{ player.display_name }}">{{ player.display_name }}</span>
+</div>

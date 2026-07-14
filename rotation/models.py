@@ -111,6 +111,13 @@ class Player(models.Model):
         return self.user.username if self.user_id else ''
 
 
+def _generate_score_share_token():
+    while True:
+        token = secrets.token_urlsafe(16)
+        if not Session.objects.filter(score_share_token=token).exists():
+            return token
+
+
 class Session(models.Model):
     class Status(models.TextChoices):
         OPEN = 'open', '报名中'
@@ -134,6 +141,9 @@ class Session(models.Model):
         Club, on_delete=models.CASCADE, related_name='sessions',
         verbose_name='俱乐部', null=True, blank=True,
     )
+    score_share_token = models.CharField(
+        '计分分享令牌', max_length=32, unique=True, blank=True,
+    )
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
 
     class Meta:
@@ -143,6 +153,11 @@ class Session(models.Model):
 
     def __str__(self):
         return self.title
+
+    def save(self, *args, **kwargs):
+        if not self.score_share_token:
+            self.score_share_token = _generate_score_share_token()
+        super().save(*args, **kwargs)
 
     @property
     def player_count(self):
@@ -282,9 +297,11 @@ class Match(models.Model):
 
     @property
     def scored_by_display(self):
-        if not self.scored_by:
-            return ''
-        return self.scored_by.get_full_name() or self.scored_by.username
+        if self.scored_by:
+            return self.scored_by.get_full_name() or self.scored_by.username
+        if self.is_completed and self.scored_at:
+            return '匿名用户'
+        return ''
 
     def team1_players(self):
         return [self.team1_player1, self.team1_player2]

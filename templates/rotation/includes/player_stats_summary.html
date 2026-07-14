@@ -1,0 +1,36 @@
+<div class="profile-summary-card">
+  <div class="profile-summary-main">
+    <div class="profile-summary-rate player-stat-rate">{{ stats.total.win_rate }}%</div>
+    <div class="profile-summary-label">总胜率</div>
+    {% if stats.trends.delta is not None %}
+    <div class="profile-stat-delta{% if stats.trends.delta >= 0 %} profile-stat-delta--up{% else %} profile-stat-delta--down{% endif %}">
+      {% if stats.trends.delta >= 0 %}+{% endif %}{{ stats.trends.delta }}% 较上次
+    </div>
+    {% endif %}
+  </div>
+  <div class="profile-summary-record">
+    {% if player %}
+    <a href="{% url 'player_matches' player.pk %}?result=win" class="profile-summary-stat-link wl-win">{{ stats.total.wins }}</a> 胜 ·
+    <a href="{% url 'player_matches' player.pk %}?result=loss" class="profile-summary-stat-link wl-loss">{{ stats.total.losses }}</a> 负 ·
+    <a href="{% url 'player_matches' player.pk %}" class="profile-summary-stat-link">{{ stats.total.matches }}</a> 场
+    {% else %}
+    <span class="wl-win">{{ stats.total.wins }}</span> 胜 ·
+    <span class="wl-loss">{{ stats.total.losses }}</span> 负 ·
+    {{ stats.total.matches }} 场
+    {% endif %}
+  </div>
+</div>
+
+{% if stats.doubles_rates %}
+<div class="profile-doubles-card">
+  <div class="profile-doubles-grid">
+    {% for item in stats.doubles_rates %}
+    <div class="profile-doubles-item">
+      <div class="profile-doubles-label">{{ item.label }}</div>
+      <div class="profile-doubles-value player-stat-rate">{{ item.win_rate }}%</div>
+      <div class="profile-doubles-meta">{{ item.wins }} 胜 / {{ item.matches }} 场</div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}

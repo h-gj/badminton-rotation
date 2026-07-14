@@ -1,0 +1,59 @@
+<div class="match-card match-card--history match-card--{{ entry.result }}" id="match-{{ entry.match.pk }}">
+  <div class="match-card-side match-card-side--{{ entry.result }}">
+    <span class="match-card-num">{{ entry.match_number }}</span>
+    {% if entry.won %}
+    <span class="match-card-check">胜</span>
+    {% elif entry.lost %}
+    <span class="match-card-check match-card-check--loss">负</span>
+    {% else %}
+    <span class="match-card-check match-card-check--draw">平</span>
+    {% endif %}
+  </div>
+  <div class="match-card-body">
+    <div class="match-teams">
+      <div class="match-team match-team--home">
+        <div class="match-team-players">
+          {% for p in entry.my_team %}
+          <div class="match-player{% if p.pk == subject_player.pk %} match-player--self{% endif %}">
+            {% include 'rotation/includes/player_avatar.html' with player=p size='sm' %}
+            <span class="match-player-name" title="{{ p.display_name }}">{{ p.display_name }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="match-score-box">
+        <div class="match-score-readonly">
+          <div class="match-score-readonly-nums">
+            <span class="score-num">{{ entry.my_score }}</span>
+            <span class="match-score-readonly-sep">:</span>
+            <span class="score-num">{{ entry.opp_score }}</span>
+          </div>
+          {% if entry.score_diff is not None %}
+          <div class="match-diff">净胜 {{ entry.score_diff }}</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="match-team match-team--away">
+        <div class="match-team-players">
+          {% for p in entry.opp_team %}
+          <div class="match-player">
+            {% include 'rotation/includes/player_avatar.html' with player=p size='sm' %}
+            <span class="match-player-name" title="{{ p.display_name }}">{{ p.display_name }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="match-meta">
+      <span class="match-meta-label">第 {{ entry.match.round_number }} 轮 · 场地 {{ entry.match.court_number }}</span>
+      {% if entry.match.is_completed and entry.match.scored_by_display %}
+      <div class="match-meta-scorer">
+        录入：{{ entry.match.scored_by_display }}{% if entry.match.scored_at %} · {{ entry.match.scored_at|date:"m-d H:i" }}{% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>

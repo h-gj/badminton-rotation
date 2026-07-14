@@ -1,0 +1,33 @@
+{% extends 'rotation/base.html' %}
+{% block title %}俱乐部管理 - 羽转{% endblock %}
+{% block content %}
+<div class="session-page manage-page">
+  <div class="manage-header">
+    <h1 class="manage-title">俱乐部管理</h1>
+    {% if is_manage_admin %}
+    <a href="{% url 'manage_club_create' %}" class="btn btn-primary btn-sm manage-header-btn">新建俱乐部</a>
+    {% endif %}
+  </div>
+  {% include 'rotation/includes/manage_tabs.html' %}
+
+  {% if clubs %}
+  <div class="player-list-card">
+    {% for club in clubs %}
+    <a href="{% url 'manage_club_edit' club.pk %}" class="player-list-item">
+      <div class="player-list-info">
+        <div class="player-list-name">{{ club.name }}</div>
+        <div class="player-list-meta">
+          创建者 @{{ club.owner.username }}
+          {% if is_manage_admin %} · 邀请码 {{ club.invite_code }}{% endif %}
+        </div>
+      </div>
+      <span class="player-list-badge">{{ club.player_count }} 人</span>
+      <span class="player-list-chevron">›</span>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="player-list-placeholder">暂无俱乐部</div>
+  {% endif %}
+</div>
+{% endblock %}

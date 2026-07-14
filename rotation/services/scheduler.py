@@ -1,6 +1,8 @@
 from itertools import combinations
 from random import shuffle
 
+MAX_BALANCED_GENERATION_ATTEMPTS = 500
+
 
 def _pair_key(a_id, b_id):
     return (a_id, b_id) if a_id < b_id else (b_id, a_id)
@@ -21,8 +23,21 @@ def _expected_games_per_player(player_count, rounds, courts):
     return total_slots // player_count
 
 
+def _target_partner_count(player_count, rounds, courts):
+    """每人与同一搭档的理想搭档次数；无法均分时返回 None。"""
+    active = _effective_slots(player_count, courts)
+    if active < 4:
+        return None
+    matches_per_round = active // 4
+    total_pair_slots = matches_per_round * rounds * 2
+    num_pairs = player_count * (player_count - 1) // 2
+    if num_pairs == 0 or total_pair_slots % num_pairs != 0:
+        return None
+    return total_pair_slots // num_pairs
+
+
 class RotationScheduler:
-    """Doubles rotation scheduler with equal games per player and minimal repeat pairings."""
+    """Doubles rotation scheduler with equal games per player and balanced partner pairings."""
 
     def __init__(self, player_ids, courts, rounds, avoid_mixed_gender_doubles=False, player_genders=None):
         self.player_ids = list(player_ids)
@@ -30,9 +45,11 @@ class RotationScheduler:
         self.rounds = rounds
         self.avoid_mixed_gender_doubles = avoid_mixed_gender_doubles
         self.player_genders = player_genders or {}
+        self.target_partner_count = _target_partner_count(len(self.player_ids), rounds, courts)
         self.partner_count = {}
         self.opponent_count = {}
         self.play_count = {pid: 0 for pid in self.player_ids}
+        self._strict_partner_balance = False
 
     def generate(self):
         n = len(self.player_ids)
@@ -43,14 +60,44 @@ class RotationScheduler:
         if target is None:
             raise ValueError('当前人数与局数无法保证每人上场次数相同，请重新选择局数')
 
+        if self.target_partner_count is not None:
+            try:
+                return self._generate_with_partner_balance(target)
+            except ValueError:
+                pass
+
+        self._reset_schedule_state()
+        matches = self._generate_schedule()
+        self._assert_balanced_play_counts(target)
+        return matches
+
+    def _reset_schedule_state(self):
+        self.partner_count = {}
+        self.opponent_count = {}
+        self.play_count = {pid: 0 for pid in self.player_ids}
+
+    def _generate_with_partner_balance(self, target_games):
+        last_error = None
+        self._strict_partner_balance = True
+        try:
+            for _ in range(MAX_BALANCED_GENERATION_ATTEMPTS):
+                self._reset_schedule_state()
+                try:
+                    matches = self._generate_schedule()
+                    self._assert_balanced_play_counts(target_games)
+                    self._assert_balanced_partner_counts()
+                    return matches
+                except ValueError as exc:
+                    last_error = exc
+            raise ValueError('无法生成搭档均衡的对阵表，请尝试其他局数') from last_error
+        finally:
+            self._strict_partner_balance = False
+
+    def _generate_schedule(self):
         matches = []
         slots_per_round = self.courts * 4
-
         for round_num in range(1, self.rounds + 1):
-            round_matches = self._schedule_round(round_num, slots_per_round)
-            matches.extend(round_matches)
-
-        self._assert_balanced_play_counts(target)
+            matches.extend(self._schedule_round(round_num, slots_per_round))
         return matches
 
     def _assert_balanced_play_counts(self, target):
@@ -59,16 +106,35 @@ class RotationScheduler:
             detail = ', '.join(f'{pid}:{self.play_count[pid]}' for pid in self.player_ids)
             raise ValueError(f'上场次数未均分（目标每人 {target} 场）：{detail}')
 
-    def _players_for_round(self, round_num):
-        """Deterministic sit-out rotation so each player plays the same number of rounds."""
+    def _assert_balanced_partner_counts(self):
+        target = self.target_partner_count
+        if target is None:
+            return
+        n = len(self.player_ids)
+        expected_pairs = n * (n - 1) // 2
+        if len(self.partner_count) != expected_pairs:
+            raise ValueError('搭档组合不完整')
+        counts = set(self.partner_count.values())
+        if counts != {target}:
+            raise ValueError(f'搭档次数不均衡：{sorted(self.partner_count.values())}')
+
+    def _sit_out_indices(self, round_num):
         n = len(self.player_ids)
         max_play = min(_effective_slots(n, self.courts), self.courts * 4)
         sit_count = n - max_play
         if sit_count <= 0:
-            return list(self.player_ids)
+            return set()
+
+        # 6 人轮转：交错轮休，避免按报名顺序连续下场导致固定搭档过多
+        if n == 6 and sit_count == 2:
+            patterns = [(0, 3), (1, 4), (2, 5)]
+            return set(patterns[(round_num - 1) % len(patterns)])
 
         round_idx = round_num - 1
-        sit_indices = {(round_idx * sit_count + j) % n for j in range(sit_count)}
+        return {(round_idx * sit_count + j) % n for j in range(sit_count)}
+
+    def _players_for_round(self, round_num):
+        sit_indices = self._sit_out_indices(round_num)
         return [pid for idx, pid in enumerate(self.player_ids) if idx not in sit_indices]
 
     def _schedule_round(self, round_num, slots_per_round):
@@ -83,7 +149,10 @@ class RotationScheduler:
         court_assignments = self._assign_courts(playing)
         round_matches = []
         for court_idx, group in enumerate(court_assignments, start=1):
-            team1, team2 = self._split_teams(group)
+            team_split = self._pick_team_split(group)
+            if team_split is None:
+                raise ValueError(f'第 {round_num} 轮无法分配搭档')
+            team1, team2 = team_split
             p1, p2 = team1
             p3, p4 = team2
             self._record_pair(p1, p2)
@@ -109,11 +178,12 @@ class RotationScheduler:
             groups.append(players[i:i + 4])
         return groups
 
-    def _split_teams(self, group):
-        best = None
-        best_score = None
+    def _pick_team_split(self, group):
+        options = []
         for team1 in combinations(group, 2):
             team2 = [p for p in group if p not in team1]
+            if not self._is_valid_partner_pair(team1) or not self._is_valid_partner_pair(team2):
+                continue
             score = (
                 self.partner_count.get(_pair_key(*team1), 0)
                 + self.partner_count.get(_pair_key(*team2), 0)
@@ -123,10 +193,22 @@ class RotationScheduler:
                 )
                 + self._gender_penalty(list(team1), team2)
             )
-            if best_score is None or score < best_score:
-                best_score = score
-                best = (list(team1), team2)
-        return best
+            options.append((score, list(team1), team2))
+
+        if not options:
+            return None
+
+        min_score = min(option[0] for option in options)
+        tied = [option for option in options if option[0] == min_score]
+        shuffle(tied)
+        _, team1, team2 = tied[0]
+        return team1, team2
+
+    def _is_valid_partner_pair(self, team):
+        if not self._strict_partner_balance or self.target_partner_count is None:
+            return True
+        a, b = team
+        return self.partner_count.get(_pair_key(a, b), 0) < self.target_partner_count
 
     def _team_gender_type(self, team):
         genders = [self.player_genders.get(pid, '') for pid in team]

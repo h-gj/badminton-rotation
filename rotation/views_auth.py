@@ -4,7 +4,7 @@ from django.shortcuts import redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
 
 from rotation.decorators import login_required_view
-from rotation.forms import PlayerAvatarForm
+from rotation.forms import PlayerAvatarForm, PlayerGenderForm
 from rotation.forms_auth import ClubForm, ClubJoinForm, LoginForm, RegisterForm
 from rotation.models import Club, ClubMembership, Player
 from rotation.services.club import get_user_club, get_club_page_context, is_site_admin, user_has_club, user_owns_club
@@ -125,6 +125,7 @@ def profile(request):
 
     stats = compute_player_stats(player) if player else None
     display_name = player.display_name if player else user.username
+    can_edit_profile = bool(player or club)
 
     return render(request, 'rotation/profile.html', {
         'club': club,
@@ -136,7 +137,9 @@ def profile(request):
         'membership': membership,
         'owned_club': owned_club,
         'is_admin': is_site_admin(user),
-        'can_edit_avatar': bool(player or club),
+        'can_edit_avatar': can_edit_profile,
+        'can_edit_profile': can_edit_profile,
+        'gender_form': PlayerGenderForm(instance=player) if player else PlayerGenderForm(),
     })
 
 
@@ -171,6 +174,29 @@ def profile_update_avatar(request):
         for field_errors in form.errors.values():
             errors.extend(field_errors)
         messages.error(request, '；'.join(errors) if errors else '头像上传失败')
+    return redirect('profile')
+
+
+@login_required_view
+def profile_update_gender(request):
+    if request.method != 'POST':
+        return redirect('profile')
+
+    player = _get_or_create_profile_player(request.user)
+    if not player:
+        messages.error(request, '请先创建或加入俱乐部后再设置性别')
+        return redirect('profile')
+
+    form = PlayerGenderForm(request.POST, instance=player)
+    if form.is_valid():
+        form.save()
+        label = player.get_gender_display() or '未设置'
+        messages.success(request, f'性别已更新为{label}')
+    else:
+        errors = []
+        for field_errors in form.errors.values():
+            errors.extend(field_errors)
+        messages.error(request, '；'.join(errors) if errors else '保存失败')
     return redirect('profile')
 
 

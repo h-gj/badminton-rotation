@@ -104,6 +104,61 @@ def _club_member_count(club):
     return count
 
 
+def can_access_manage(user):
+    """站点管理员或俱乐部创建者可进入管理后台。"""
+    if not user.is_authenticated:
+        return False
+    return is_site_admin(user) or user_owns_club(user)
+
+
+def user_can_manage_club(user, club):
+    if is_site_admin(user):
+        return True
+    return user.is_authenticated and club.owner_id == user.id
+
+
+def user_can_manage_player(user, player):
+    if is_site_admin(user):
+        return True
+    if not user.is_authenticated or not player.club_id:
+        return False
+    owned = Club.objects.filter(owner=user).first()
+    return owned is not None and player.club_id == owned.pk
+
+
+def manage_club_queryset(user):
+    qs = Club.objects.select_related('owner').annotate(
+        player_count=Count('players'),
+        member_count=Count('memberships'),
+    )
+    if is_site_admin(user):
+        return qs.order_by('name')
+    owned = Club.objects.filter(owner=user).first()
+    if owned:
+        return qs.filter(pk=owned.pk)
+    return Club.objects.none()
+
+
+def manage_player_queryset(user, club_id=None, q=''):
+    if is_site_admin(user):
+        qs = Player.objects.select_related('club', 'user')
+        if club_id:
+            qs = qs.filter(club_id=club_id)
+    else:
+        owned = Club.objects.filter(owner=user).first()
+        if not owned:
+            return Player.objects.none()
+        qs = Player.objects.filter(club=owned).select_related('club', 'user')
+    if q:
+        qs = qs.filter(
+            Q(name__icontains=q)
+            | Q(nickname__icontains=q)
+            | Q(phone__icontains=q)
+            | Q(user__username__icontains=q)
+        )
+    return qs.order_by('name')
+
+
 def get_club_page_context(user):
     club = get_user_club(user)
     admin = is_site_admin(user)

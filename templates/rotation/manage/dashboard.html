@@ -1,0 +1,38 @@
+{% extends 'rotation/base.html' %}
+{% block title %}管理后台 - 羽转{% endblock %}
+{% block content %}
+<div class="session-page manage-page">
+  <div class="manage-header">
+    <h1 class="manage-title">管理后台</h1>
+    <p class="manage-subtitle">{% if is_manage_admin %}站点管理员 · 全部俱乐部{% else %}俱乐部创建者{% endif %}</p>
+  </div>
+  {% include 'rotation/includes/manage_tabs.html' %}
+
+  <div class="profile-stat-grid manage-stat-grid">
+    <div class="profile-stat-item">
+      <div class="profile-stat-value">{{ stats.club_count }}</div>
+      <div class="profile-stat-label">俱乐部</div>
+    </div>
+    <div class="profile-stat-item">
+      <div class="profile-stat-value">{{ stats.player_count }}</div>
+      <div class="profile-stat-label">球员</div>
+    </div>
+    <div class="profile-stat-item">
+      <div class="profile-stat-value">{{ stats.account_count }}</div>
+      <div class="profile-stat-label">已开账号</div>
+    </div>
+  </div>
+
+  <div class="profile-card">
+    <div class="profile-card-title">快捷操作</div>
+    <div class="manage-action-list">
+      <a href="{% url 'manage_player_create' %}" class="manage-action-item">新增球员</a>
+      <a href="{% url 'manage_player_list' %}" class="manage-action-item">球员列表</a>
+      <a href="{% url 'manage_club_list' %}" class="manage-action-item">俱乐部管理</a>
+      {% if is_manage_admin %}
+      <a href="{% url 'manage_club_create' %}" class="manage-action-item">新建俱乐部</a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

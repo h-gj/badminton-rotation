@@ -1,5 +1,5 @@
 from rotation.models import Match, Player, Registration, Session
-from rotation.services.stats import _pair_key
+from rotation.services.stats import MIN_PARTNER_MATCHES_FOR_RATE, _pair_key
 
 
 def _aggregate_global_stats(club=None):
@@ -130,8 +130,7 @@ def _partner_matches_filter(row, q):
     return q.lower() in haystack
 
 
-def build_win_rate_rankings(q='', club=None):
-    data = _aggregate_global_stats(club=club)
+def _build_win_rate_rows(data, q=''):
     rows = []
     for row in data['player_stats'].values():
         if row['matches'] <= 0:
@@ -149,11 +148,10 @@ def build_win_rate_rankings(q='', club=None):
     return rows
 
 
-def build_attendance_rankings(q='', club=None):
-    data = _aggregate_global_stats(club=club)
+def _build_attendance_rows(data, q=''):
     total = data['total_sessions']
     if not total:
-        return [], total
+        return []
 
     rows = []
     for row in data['player_stats'].values():
@@ -169,14 +167,13 @@ def build_attendance_rankings(q='', club=None):
     rows.sort(key=lambda x: (
         -x['attendance_rate'], -x['sessions_attended'], x['player'].display_name,
     ))
-    return rows, total
+    return rows
 
 
-def build_partner_rankings(q='', club=None):
-    data = _aggregate_global_stats(club=club)
+def _build_partner_rows(data, q=''):
     rows = []
     for bucket in data['partner_buckets'].values():
-        if bucket['matches'] <= 0:
+        if bucket['matches'] < MIN_PARTNER_MATCHES_FOR_RATE:
             continue
         row = {**bucket}
         if not _partner_matches_filter(row, q):
@@ -189,3 +186,28 @@ def build_partner_rankings(q='', club=None):
         x['player1'].display_name, x['player2'].display_name,
     ))
     return rows
+
+
+def build_all_rankings(q='', club=None):
+    data = _aggregate_global_stats(club=club)
+    return {
+        'win_rate': _build_win_rate_rows(data, q),
+        'attendance': _build_attendance_rows(data, q),
+        'partner': _build_partner_rows(data, q),
+        'total_sessions': data['total_sessions'],
+    }
+
+
+def build_win_rate_rankings(q='', club=None):
+    data = _aggregate_global_stats(club=club)
+    return _build_win_rate_rows(data, q)
+
+
+def build_attendance_rankings(q='', club=None):
+    data = _aggregate_global_stats(club=club)
+    return _build_attendance_rows(data, q), data['total_sessions']
+
+
+def build_partner_rankings(q='', club=None):
+    data = _aggregate_global_stats(club=club)
+    return _build_partner_rows(data, q)

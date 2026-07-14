@@ -34,24 +34,56 @@
   </div>
 
   {% if stats %}
-  <div class="profile-stat-grid">
-    <div class="profile-stat-item">
-      <div class="profile-stat-value player-stat-win">{{ stats.total.wins }}</div>
-      <div class="profile-stat-label">胜场</div>
+  {% include 'rotation/includes/player_stats_summary.html' with stats=stats player=player %}
+
+  {% if stats.trends.chart.points %}
+  <div class="profile-card profile-trends-card">
+    <div class="profile-card-title">往期胜率</div>
+    <div class="profile-win-rate-chart" role="img" aria-label="各次活动胜率趋势图">
+      <div class="profile-chart-y-axis">
+        <span>100%</span>
+        <span>50%</span>
+        <span>0%</span>
+      </div>
+      <div class="profile-chart-body">
+        <div class="profile-chart-grid">
+          <span class="profile-chart-grid-line profile-chart-grid-line--50"></span>
+        </div>
+        <div class="profile-chart-scroll">
+          <div class="profile-chart-scroll-inner" style="min-width: {{ stats.trends.chart.min_width_rem }}rem;">
+            <div class="profile-chart-plot">
+              <svg class="profile-chart-line-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                <defs>
+                  <linearGradient id="profileChartAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#159957" stop-opacity="0.28"/>
+                    <stop offset="100%" stop-color="#0d6efd" stop-opacity="0.04"/>
+                  </linearGradient>
+                </defs>
+                <polygon class="profile-chart-area" points="{{ stats.trends.chart.area }}"></polygon>
+                <polyline class="profile-chart-line" points="{{ stats.trends.chart.polyline }}"></polyline>
+              </svg>
+              {% for pt in stats.trends.chart.points %}
+              <div class="profile-chart-point" style="left: {{ pt.x }}%; top: {{ pt.y }}%;"
+                   title="{{ pt.title }}">
+                <span class="profile-chart-dot"></span>
+              </div>
+              {% endfor %}
+            </div>
+            <div class="profile-chart-labels">
+              {% for pt in stats.trends.chart.points %}
+              <div class="profile-chart-label-col" style="left: {{ pt.x }}%;">
+                <span class="profile-chart-rate">{{ pt.win_rate }}%</span>
+                <span class="profile-chart-label">{{ pt.label }}</span>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="profile-stat-item">
-      <div class="profile-stat-value player-stat-loss">{{ stats.total.losses }}</div>
-      <div class="profile-stat-label">负场</div>
-    </div>
-    <div class="profile-stat-item">
-      <div class="profile-stat-value">{{ stats.total.matches }}</div>
-      <div class="profile-stat-label">总场次</div>
-    </div>
-    <div class="profile-stat-item">
-      <div class="profile-stat-value player-stat-rate">{{ stats.total.win_rate }}%</div>
-      <div class="profile-stat-label">胜率</div>
-    </div>
+    <p class="profile-chart-hint">按活动时间从左到右，曲线为当次活动胜率</p>
   </div>
+  {% endif %}
   {% endif %}
 
   <div class="profile-card">
@@ -64,6 +96,15 @@
     <div class="profile-info-row">
       <span class="profile-info-label">球员姓名</span>
       <span class="profile-info-value">{{ player.name }}{% if player.nickname %}（{{ player.nickname }}）{% endif %}</span>
+    </div>
+    {% endif %}
+    {% if can_edit_profile %}
+    <div class="profile-info-row">
+      <span class="profile-info-label">性别</span>
+      <span class="profile-info-value">
+        {% if player and player.gender %}{{ player.get_gender_display }}{% else %}未设置{% endif %}
+        <button type="button" class="profile-info-edit-btn" data-bs-toggle="modal" data-bs-target="#profileGenderModal">修改</button>
+      </span>
     </div>
     {% endif %}
     <div class="profile-info-row">
@@ -108,6 +149,9 @@
   </div>
 
   <div class="profile-actions">
+    {% if can_access_manage %}
+    <a href="{% url 'manage_dashboard' %}" class="btn btn-outline-primary btn-lg">管理后台</a>
+    {% endif %}
     {% if player %}
     <a href="{% url 'player_detail' player.pk %}" class="btn btn-primary btn-lg">查看我的战绩</a>
     {% endif %}
@@ -151,6 +195,31 @@
           {% if player and player.avatar %}
           <button type="submit" name="clear_avatar" value="1" class="btn btn-outline-secondary w-100">清除头像</button>
           {% endif %}
+          <button type="button" class="btn btn-light w-100" data-bs-dismiss="modal">取消</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if can_edit_profile and gender_form %}
+<div class="modal fade" id="profileGenderModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title w-100 text-center fw-bold">设置性别</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{% url 'profile_update_gender' %}">
+        {% csrf_token %}
+        <div class="modal-body pt-2">
+          <p class="text-muted small text-center mb-3">用于统计男双、女双、混双胜率</p>
+          <label class="form-label" for="{{ gender_form.gender.id_for_label }}">性别</label>
+          {{ gender_form.gender }}
+        </div>
+        <div class="modal-footer border-0 pt-0 flex-column gap-2">
+          <button type="submit" class="btn btn-primary w-100">保存</button>
           <button type="button" class="btn btn-light w-100" data-bs-dismiss="modal">取消</button>
         </div>
       </form>

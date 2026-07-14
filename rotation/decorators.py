@@ -5,7 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect
 
 
-from rotation.services.club import get_user_club, is_site_admin
+from rotation.services.club import can_access_manage, get_user_club, is_site_admin
 
 
 def login_required_view(view):
@@ -24,6 +24,18 @@ def require_club(view):
         if not request.club and not is_site_admin(request.user):
             messages.info(request, '请先创建或加入俱乐部')
             return redirect('club_home')
+        return view(request, *args, **kwargs)
+
+    return wrapper
+
+
+def require_manager(view):
+    @login_required_view
+    @wraps(view)
+    def wrapper(request, *args, **kwargs):
+        if not can_access_manage(request.user):
+            messages.error(request, '无权访问管理后台')
+            return redirect('home')
         return view(request, *args, **kwargs)
 
     return wrapper

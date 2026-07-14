@@ -26,7 +26,7 @@ from rotation.forms import (
     default_session_title,
     parse_player_names,
 )
-from rotation.models import Match, Player, Registration, Session
+from rotation.models import Club, Match, Player, Registration, Session
 from rotation.services.round_options import pick_default_rounds, recommend_round_options
 from rotation.services.club import (
     get_user_club,
@@ -38,12 +38,13 @@ from rotation.services.club import (
 )
 from rotation.services.player_provision import get_or_create_club_player
 from rotation.services.scheduler import generate_session_matches
-from rotation.services.stats import compute_player_stats, compute_session_stats
-from rotation.services.rankings import (
-    build_attendance_rankings,
-    build_partner_rankings,
-    build_win_rate_rankings,
+from rotation.services.stats import (
+    compute_player_stats,
+    compute_session_stats,
+    get_player_match_groups,
+    get_session_leaderboard_context,
 )
+from rotation.services.rankings import build_all_rankings
 from rotation.services.wechat_import import (
     WechatImportError,
     build_import_preview,
@@ -84,6 +85,60 @@ def _can_score_session(request, session):
     if not club:
         return False
     return session.club_id == club.pk
+
+
+def _user_owns_session(user, session):
+    if not user.is_authenticated or not session.club_id:
+        return False
+    owned = Club.objects.filter(owner=user).first()
+    return owned is not None and owned.pk == session.club_id
+
+
+def _get_session_by_share_token(pk, token):
+    session = get_object_or_404(Session, pk=pk)
+    if not session.score_share_token or session.score_share_token != token:
+        raise Http404
+    return session
+
+
+def _render_session_matches(request, session, *, is_share_view=False):
+    can_score = session.scores_editable if is_share_view else _can_score_session(request, session)
+    matches = session.matches.select_related(
+        'team1_player1', 'team1_player2', 'team2_player1', 'team2_player2', 'scored_by',
+    )
+    rounds = {}
+    flat_matches = []
+    for i, m in enumerate(matches, start=1):
+        m.match_number = i
+        flat_matches.append(m)
+        rounds.setdefault(m.round_number, []).append(m)
+
+    round_list = sorted(rounds.items())
+    match_count = len(flat_matches)
+    completed_count = sum(1 for m in flat_matches if m.is_completed)
+    # if flat_matches:
+    #     _print_match_schedule(session, flat_matches)
+
+    share_url = ''
+    can_share_score = False
+    if not is_share_view and _user_owns_session(request.user, session):
+        can_share_score = True
+        share_url = request.build_absolute_uri(
+            reverse('session_matches_share', args=[session.pk, session.score_share_token])
+        )
+
+    return render(request, 'rotation/matches.html', {
+        'session': session,
+        'round_list': round_list,
+        'flat_matches': flat_matches,
+        'match_count': match_count,
+        'completed_count': completed_count,
+        'can_score': can_score,
+        'is_share_view': is_share_view,
+        'score_share_token': session.score_share_token if is_share_view else '',
+        'can_share_score': can_share_score,
+        'share_url': share_url,
+    })
 
 
 def _login_redirect(request, next_path):
@@ -421,30 +476,13 @@ def _print_match_schedule(session, flat_matches):
 @ensure_csrf_cookie
 def session_matches(request, pk):
     session = _get_viewable_session(request, pk)
-    can_score = _can_score_session(request, session)
-    matches = session.matches.select_related(
-        'team1_player1', 'team1_player2', 'team2_player1', 'team2_player2', 'scored_by',
-    )
-    rounds = {}
-    flat_matches = []
-    for i, m in enumerate(matches, start=1):
-        m.match_number = i
-        flat_matches.append(m)
-        rounds.setdefault(m.round_number, []).append(m)
+    return _render_session_matches(request, session)
 
-    round_list = sorted(rounds.items())
-    match_count = len(flat_matches)
-    completed_count = sum(1 for m in flat_matches if m.is_completed)
-    if flat_matches:
-        _print_match_schedule(session, flat_matches)
-    return render(request, 'rotation/matches.html', {
-        'session': session,
-        'round_list': round_list,
-        'flat_matches': flat_matches,
-        'match_count': match_count,
-        'completed_count': completed_count,
-        'can_score': can_score,
-    })
+
+@ensure_csrf_cookie
+def session_matches_share(request, pk, token):
+    session = _get_session_by_share_token(pk, token)
+    return _render_session_matches(request, session, is_share_view=True)
 
 
 def _update_session_status(session):
@@ -471,7 +509,7 @@ def _match_score_json(match, session):
         'completed_count': completed_count,
         'match_count': match_count,
         'scored_by_display': match.scored_by_display,
-        'scored_at_label': scored_at.strftime('%m-%d %H:%M') if scored_at else '',
+        'scored_at_label': scored_at.strftime('%H:%M:%S') if scored_at else '',
     }
 
 
@@ -505,17 +543,47 @@ def match_score(request, pk):
         messages.error(request, '无权修改此活动比分')
         return redirect('session_matches', pk=session_pk)
 
+    return _process_match_score(request, match, is_ajax, scored_by=request.user)
+
+
+@ensure_csrf_cookie
+def match_score_share(request, pk, token):
+    match = get_object_or_404(Match.objects.select_related('session'), pk=pk)
+    session = match.session
+    session_pk = session.pk
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    if request.method != 'POST':
+        if is_ajax:
+            return JsonResponse({'ok': False, 'errors': ['无效请求']}, status=405)
+        return redirect('session_matches_share', pk=session_pk, token=token)
+
+    if not session.score_share_token or session.score_share_token != token:
+        if is_ajax:
+            return JsonResponse({'ok': False, 'errors': ['分享链接无效']}, status=404)
+        raise Http404
+
+    scored_by = request.user if request.user.is_authenticated else None
+    return _process_match_score(request, match, is_ajax, scored_by=scored_by)
+
+
+def _process_match_score(request, match, is_ajax, scored_by):
+    session = match.session
+    session_pk = session.pk
+
     if not session.scores_editable:
         locked_msg = '比赛已结束，不能再修改比分'
         if is_ajax:
             return JsonResponse({'ok': False, 'errors': [locked_msg]}, status=403)
         messages.error(request, locked_msg)
-        return redirect('session_matches', pk=session_pk)
+        redirect_name = 'session_matches_share' if scored_by is None else 'session_matches'
+        if scored_by is None:
+            return redirect(redirect_name, pk=session_pk, token=session.score_share_token)
+        return redirect(redirect_name, pk=session_pk)
 
     form = MatchScoreForm(request.POST, instance=match)
     if form.is_valid():
         match = form.save(commit=False)
-        match.scored_by = request.user
+        match.scored_by = scored_by
         match.scored_at = timezone.now()
         match.save()
         _update_session_status(match.session)
@@ -528,6 +596,9 @@ def match_score(request, pk):
         if is_ajax:
             return JsonResponse({'ok': False, 'errors': errors or ['比分无效']}, status=400)
         messages.error(request, '；'.join(errors) if errors else '比分无效')
+    redirect_name = 'session_matches_share' if scored_by is None else 'session_matches'
+    if scored_by is None:
+        return redirect(redirect_name, pk=session_pk, token=session.score_share_token)
     return redirect('session_matches', pk=session_pk)
 
 
@@ -539,14 +610,12 @@ def session_leaderboard(request, pk):
     if sort_by not in ('wins', 'points'):
         sort_by = 'wins'
     leaderboard = compute_session_stats(session, sort_by=sort_by)
-    match_count = session.matches.count()
-    completed_count = session.matches.filter(is_completed=True).count()
+    status_ctx = get_session_leaderboard_context(session, request.user)
     return render(request, 'rotation/leaderboard.html', {
         'session': session,
         'leaderboard': leaderboard,
         'sort_by': sort_by,
-        'match_count': match_count,
-        'completed_count': completed_count,
+        **status_ctx,
     })
 
 
@@ -566,96 +635,95 @@ def _serialize_player(player, request):
     }
 
 
-RANKINGS_TABS = ('win_rate', 'attendance', 'partner')
+RANKINGS_SECTION_LIMIT = 10
 
 
-def _paginate_rankings(rows, page_num, per_page=10):
-    paginator = Paginator(rows, per_page)
-    try:
-        page_obj = paginator.page(page_num)
-    except PageNotAnInteger:
-        page_obj = paginator.page(1)
-    except EmptyPage:
-        page_obj = paginator.page(paginator.num_pages or 1)
-    return paginator, page_obj
+def _serialize_win_rate_item(row, rank, request):
+    p = row['player']
+    return {
+        'rank': rank,
+        'id': p.pk,
+        'name': p.name,
+        'nickname': p.nickname,
+        'display_name': p.display_name,
+        'avatar_url': p.avatar.url if p.avatar else '',
+        'detail_url': reverse('player_detail', args=[p.pk]),
+        'wins': row['wins'],
+        'losses': row['losses'],
+        'matches': row['matches'],
+        'win_rate': row['win_rate'],
+    }
+
+
+def _serialize_attendance_item(row, rank, request, total_sessions):
+    p = row['player']
+    return {
+        'rank': rank,
+        'id': p.pk,
+        'name': p.name,
+        'nickname': p.nickname,
+        'display_name': p.display_name,
+        'avatar_url': p.avatar.url if p.avatar else '',
+        'detail_url': reverse('player_detail', args=[p.pk]),
+        'sessions_attended': row['sessions_attended'],
+        'total_sessions': total_sessions,
+        'attendance_rate': row['attendance_rate'],
+    }
+
+
+def _serialize_partner_item(row, rank, request):
+    return {
+        'rank': rank,
+        'player1': _serialize_player(row['player1'], request),
+        'player2': _serialize_player(row['player2'], request),
+        'wins': row['wins'],
+        'losses': row['losses'],
+        'matches': row['matches'],
+        'win_rate': row['win_rate'],
+    }
 
 
 @require_club
 def rankings(request):
-    tab = request.GET.get('tab', 'win_rate')
-    if tab not in RANKINGS_TABS:
-        tab = 'win_rate'
-
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         q = request.GET.get('q', '').strip()
-        page_num = request.GET.get('page', 1)
-        total_sessions = None
         club = user_club_scope(request.user)
+        data = build_all_rankings(q, club=club)
+        total_sessions = data['total_sessions']
+        limit = RANKINGS_SECTION_LIMIT
 
-        if tab == 'win_rate':
-            rows = build_win_rate_rankings(q, club=club)
-        elif tab == 'attendance':
-            rows, total_sessions = build_attendance_rankings(q, club=club)
-        else:
-            rows = build_partner_rankings(q, club=club)
+        win_rate_rows = data['win_rate'][:limit]
+        attendance_rows = data['attendance'][:limit]
+        partner_rows = data['partner'][:limit]
 
-        paginator, page_obj = _paginate_rankings(rows, page_num)
-        base_rank = (page_obj.number - 1) * paginator.per_page
-        items = []
-
-        for i, row in enumerate(page_obj.object_list):
-            rank = base_rank + i + 1
-            if tab == 'partner':
-                items.append({
-                    'rank': rank,
-                    'player1': _serialize_player(row['player1'], request),
-                    'player2': _serialize_player(row['player2'], request),
-                    'wins': row['wins'],
-                    'losses': row['losses'],
-                    'matches': row['matches'],
-                    'win_rate': row['win_rate'],
-                })
-            else:
-                p = row['player']
-                item = {
-                    'rank': rank,
-                    'id': p.pk,
-                    'name': p.name,
-                    'nickname': p.nickname,
-                    'display_name': p.display_name,
-                    'avatar_url': p.avatar.url if p.avatar else '',
-                    'detail_url': reverse('player_detail', args=[p.pk]),
-                }
-                if tab == 'win_rate':
-                    item.update({
-                        'wins': row['wins'],
-                        'losses': row['losses'],
-                        'matches': row['matches'],
-                        'win_rate': row['win_rate'],
-                    })
-                else:
-                    item.update({
-                        'sessions_attended': row['sessions_attended'],
-                        'total_sessions': total_sessions,
-                        'attendance_rate': row['attendance_rate'],
-                    })
-                items.append(item)
-
-        payload = {
-            'tab': tab,
-            'total': paginator.count,
-            'page': page_obj.number,
-            'num_pages': paginator.num_pages,
-            'has_previous': page_obj.has_previous(),
-            'has_next': page_obj.has_next(),
-            'items': items,
-        }
-        if tab == 'attendance':
-            payload['total_sessions'] = total_sessions
-        return JsonResponse(payload)
+        return JsonResponse({
+            'total_sessions': total_sessions,
+            'sections': {
+                'win_rate': {
+                    'total': len(data['win_rate']),
+                    'items': [
+                        _serialize_win_rate_item(row, i + 1, request)
+                        for i, row in enumerate(win_rate_rows)
+                    ],
+                },
+                'attendance': {
+                    'total': len(data['attendance']),
+                    'items': [
+                        _serialize_attendance_item(row, i + 1, request, total_sessions)
+                        for i, row in enumerate(attendance_rows)
+                    ],
+                },
+                'partner': {
+                    'total': len(data['partner']),
+                    'items': [
+                        _serialize_partner_item(row, i + 1, request)
+                        for i, row in enumerate(partner_rows)
+                    ],
+                },
+            },
+        })
 
     return render(request, 'rotation/rankings.html', {
-        'tab': tab,
         'club_tab': 'rankings',
         **get_club_page_context(request.user),
     })
@@ -694,6 +762,32 @@ def player_detail(request, pk):
     player = _get_club_player(request, pk)
     stats = compute_player_stats(player)
     return render(request, 'rotation/player_detail.html', {'player': player, 'stats': stats})
+
+
+@require_club
+def player_matches(request, pk):
+    player = _get_club_player(request, pk)
+    result = request.GET.get('result', 'all')
+    session_groups, counts = get_player_match_groups(player, result)
+
+    own_player = Player.objects.filter(user=request.user).first()
+    if own_player and own_player.pk == player.pk:
+        back_url = reverse('profile')
+        back_label = '个人中心'
+    else:
+        back_url = reverse('player_detail', args=[player.pk])
+        back_label = player.display_name
+
+    filter_labels = {'all': '全部', 'win': '胜场', 'loss': '负场'}
+    return render(request, 'rotation/player_matches.html', {
+        'player': player,
+        'session_groups': session_groups,
+        'counts': counts,
+        'result': result if result in filter_labels else 'all',
+        'filter_labels': filter_labels,
+        'back_url': back_url,
+        'back_label': back_label,
+    })
 
 
 @require_club

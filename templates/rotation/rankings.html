@@ -6,33 +6,43 @@
   {% include 'rotation/includes/club_tabs.html' %}
 
   <div class="rankings-page player-page" id="rankingsPage"
-       data-api-url="{% url 'rankings' %}"
-       data-initial-tab="{{ tab }}">
+       data-api-url="{% url 'rankings' %}">
     <p class="player-page-subtitle club-section-subtitle" id="rankingsSubtitle">加载中…</p>
 
-  <div class="session-tabs rankings-tabs" id="rankingsTabs" role="tablist">
-    <a href="#" class="session-tab rankings-tab{% if tab == 'win_rate' %} active{% endif %}"
-       data-tab="win_rate" role="tab">胜率</a>
-    <a href="#" class="session-tab rankings-tab{% if tab == 'attendance' %} active{% endif %}"
-       data-tab="attendance" role="tab">出勤率</a>
-    <a href="#" class="session-tab rankings-tab{% if tab == 'partner' %} active{% endif %}"
-       data-tab="partner" role="tab">搭档胜率</a>
-  </div>
+    <div class="player-list-search-wrap" id="rankingsSearchWrap" hidden>
+      <input type="search" id="rankingsSearch" class="form-control player-list-search"
+             placeholder="搜索姓名或昵称…" autocomplete="off">
+    </div>
 
-  <div class="player-list-search-wrap" id="rankingsSearchWrap" hidden>
-    <input type="search" id="rankingsSearch" class="form-control player-list-search"
-           placeholder="搜索姓名或昵称…" autocomplete="off">
-  </div>
+    <section class="rankings-section">
+      <div class="rankings-section-head">
+        <h2 class="rankings-section-title">胜率</h2>
+        <p class="rankings-section-meta" id="rankingsWinRateMeta"></p>
+      </div>
+      <div class="player-list-card" id="rankingsWinRate">
+        <div class="player-list-placeholder">加载中…</div>
+      </div>
+    </section>
 
-  <div class="player-list-card" id="rankingsCard">
-    <div class="player-list-placeholder" id="rankingsLoading">加载中…</div>
-  </div>
+    <section class="rankings-section">
+      <div class="rankings-section-head">
+        <h2 class="rankings-section-title">出勤率</h2>
+        <p class="rankings-section-meta" id="rankingsAttendanceMeta"></p>
+      </div>
+      <div class="player-list-card" id="rankingsAttendance">
+        <div class="player-list-placeholder">加载中…</div>
+      </div>
+    </section>
 
-  <nav class="player-list-pagination" id="rankingsPagination" aria-label="排行榜分页" hidden>
-    <button type="button" class="player-list-page-btn" id="rankingsPrev" disabled>上一页</button>
-    <span class="player-list-page-info" id="rankingsPageInfo">1 / 1</span>
-    <button type="button" class="player-list-page-btn" id="rankingsNext" disabled>下一页</button>
-  </nav>
+    <section class="rankings-section">
+      <div class="rankings-section-head">
+        <h2 class="rankings-section-title">搭档胜率</h2>
+        <p class="rankings-section-meta" id="rankingsPartnerMeta">搭过 4 场以上才统计</p>
+      </div>
+      <div class="player-list-card" id="rankingsPartner">
+        <div class="player-list-placeholder">加载中…</div>
+      </div>
+    </section>
   </div>
 </div>
 {% endblock %}
@@ -45,24 +55,16 @@
 
   var apiUrl = pageEl.dataset.apiUrl;
   var subtitleEl = document.getElementById('rankingsSubtitle');
-  var tabsEl = document.getElementById('rankingsTabs');
   var searchWrap = document.getElementById('rankingsSearchWrap');
   var searchInput = document.getElementById('rankingsSearch');
-  var cardEl = document.getElementById('rankingsCard');
-  var paginationEl = document.getElementById('rankingsPagination');
-  var prevBtn = document.getElementById('rankingsPrev');
-  var nextBtn = document.getElementById('rankingsNext');
-  var pageInfoEl = document.getElementById('rankingsPageInfo');
-
-  var TAB_LABELS = {
-    win_rate: '胜率',
-    attendance: '出勤率',
-    partner: '搭档胜率',
-  };
+  var winRateMeta = document.getElementById('rankingsWinRateMeta');
+  var attendanceMeta = document.getElementById('rankingsAttendanceMeta');
+  var partnerMeta = document.getElementById('rankingsPartnerMeta');
+  var winRateCard = document.getElementById('rankingsWinRate');
+  var attendanceCard = document.getElementById('rankingsAttendance');
+  var partnerCard = document.getElementById('rankingsPartner');
 
   var state = {
-    tab: pageEl.dataset.initialTab || 'win_rate',
-    page: 1,
     q: '',
     loading: false,
     totalSessions: null,
@@ -157,87 +159,98 @@
     );
   }
 
-  function emptyMessage() {
-    if (state.q) return '没有匹配的排行数据';
-    if (state.tab === 'win_rate') return '暂无比赛数据，完成计分后会出现在这里';
-    if (state.tab === 'attendance') return '暂无出勤数据，球员报名活动后会出现在这里';
-    return '暂无搭档数据，完成双打计分后会出现在这里';
+  var EMPTY_MESSAGES = {
+    win_rate: '暂无比赛数据，完成计分后会出现在这里',
+    attendance: '暂无出勤数据，球员报名活动后会出现在这里',
+    partner: '暂无搭档数据，搭档完成 4 场以上后会出现在这里',
+  };
+
+  function renderSection(cardEl, items, renderFn, emptyMsg) {
+    if (!items.length) {
+      cardEl.innerHTML = '<div class="player-list-placeholder">' + emptyMsg + '</div>';
+      return;
+    }
+    cardEl.innerHTML = items.map(renderFn).join('');
   }
 
-  function updateSubtitle(data) {
-    var label = TAB_LABELS[state.tab] || '';
-    if (state.tab === 'attendance' && data.total_sessions != null) {
-      subtitleEl.textContent = '共 ' + data.total + ' 人 · 已有 ' + data.total_sessions + ' 场活动 · 按' + label + '排序';
-    } else {
-      subtitleEl.textContent = '共 ' + data.total + ' 条 · 按' + label + '排序';
-    }
+  function sectionMeta(total, suffix) {
+    if (!total) return '';
+    return '共 ' + total + suffix;
   }
 
   function renderRankings(data) {
-    if (data.total_sessions != null) {
-      state.totalSessions = data.total_sessions;
-    }
+    var sections = data.sections || {};
+    var winRate = sections.win_rate || { total: 0, items: [] };
+    var attendance = sections.attendance || { total: 0, items: [] };
+    var partner = sections.partner || { total: 0, items: [] };
+    state.totalSessions = data.total_sessions;
 
-    if (!data.total && !state.q) {
-      searchWrap.hidden = true;
-      paginationEl.hidden = true;
-      updateSubtitle({ total: 0, total_sessions: state.totalSessions });
-      cardEl.innerHTML = '<div class="player-list-placeholder">' + emptyMessage() + '</div>';
-      return;
-    }
+    var hasAny = winRate.total || attendance.total || partner.total;
+    searchWrap.hidden = !hasAny && !state.q;
 
-    searchWrap.hidden = false;
-    updateSubtitle(data);
-
-    if (!data.items.length) {
-      cardEl.innerHTML = '<div class="player-list-placeholder">' + emptyMessage() + '</div>';
+    if (!hasAny && !state.q) {
+      subtitleEl.textContent = '完成计分与报名后，排行榜会自动更新';
+    } else if (state.q) {
+      subtitleEl.textContent = '搜索「' + state.q + '」的结果';
+    } else if (state.totalSessions) {
+      subtitleEl.textContent = '已有 ' + state.totalSessions + ' 场活动 · 各榜展示前 10 名';
     } else {
-      var renderFn = renderWinRateItem;
-      if (state.tab === 'attendance') renderFn = renderAttendanceItem;
-      if (state.tab === 'partner') renderFn = renderPartnerItem;
-      cardEl.innerHTML = data.items.map(renderFn).join('');
+      subtitleEl.textContent = '各榜展示前 10 名';
     }
 
-    if (data.num_pages > 1) {
-      paginationEl.hidden = false;
-      pageInfoEl.textContent = data.page + ' / ' + data.num_pages;
-      prevBtn.disabled = !data.has_previous;
-      nextBtn.disabled = !data.has_next;
+    winRateMeta.textContent = sectionMeta(winRate.total, ' 人');
+    if (state.totalSessions) {
+      attendanceMeta.textContent = '已有 ' + state.totalSessions + ' 场活动 · ' + sectionMeta(attendance.total, ' 人');
     } else {
-      paginationEl.hidden = true;
+      attendanceMeta.textContent = sectionMeta(attendance.total, ' 人');
     }
+    partnerMeta.textContent = '搭过 4 场以上才统计 · ' + sectionMeta(partner.total, ' 对');
+
+    var emptySuffix = state.q ? '没有匹配的排行数据' : '';
+    renderSection(
+      winRateCard,
+      winRate.items,
+      renderWinRateItem,
+      state.q ? emptySuffix : EMPTY_MESSAGES.win_rate
+    );
+    renderSection(
+      attendanceCard,
+      attendance.items,
+      renderAttendanceItem,
+      state.q ? emptySuffix : EMPTY_MESSAGES.attendance
+    );
+    renderSection(
+      partnerCard,
+      partner.items,
+      renderPartnerItem,
+      state.q ? emptySuffix : EMPTY_MESSAGES.partner
+    );
   }
 
   function syncUrl() {
     var params = new URLSearchParams();
-    if (state.tab !== 'win_rate') params.set('tab', state.tab);
-    if (state.page > 1) params.set('page', state.page);
     if (state.q) params.set('q', state.q);
     var qs = params.toString();
     history.replaceState(null, '', qs ? ('?' + qs) : window.location.pathname);
   }
 
-  function setActiveTab(tab) {
-    state.tab = tab;
-    var tabs = tabsEl.querySelectorAll('.rankings-tab');
-    tabs.forEach(function (el) {
-      el.classList.toggle('active', el.dataset.tab === tab);
-    });
+  function setLoading() {
+    var loadingHtml = '<div class="player-list-placeholder">加载中…</div>';
+    winRateCard.innerHTML = loadingHtml;
+    attendanceCard.innerHTML = loadingHtml;
+    partnerCard.innerHTML = loadingHtml;
   }
 
-  function loadRankings(page) {
+  function loadRankings() {
     if (state.loading) return;
-    state.page = page || 1;
     state.loading = true;
-    cardEl.innerHTML = '<div class="player-list-placeholder">加载中…</div>';
+    setLoading();
 
-    var params = new URLSearchParams({
-      tab: state.tab,
-      page: state.page,
-    });
+    var params = new URLSearchParams();
     if (state.q) params.set('q', state.q);
+    var qs = params.toString();
 
-    fetch(apiUrl + '?' + params.toString(), {
+    fetch(apiUrl + (qs ? ('?' + qs) : ''), {
       headers: { 'X-Requested-With': 'XMLHttpRequest' },
       credentials: 'same-origin',
     }).then(function (resp) {
@@ -249,34 +262,18 @@
     }).catch(function () {
       state.loading = false;
       subtitleEl.textContent = '加载失败';
-      cardEl.innerHTML = '<div class="player-list-placeholder">加载失败，请刷新重试</div>';
+      var failHtml = '<div class="player-list-placeholder">加载失败，请刷新重试</div>';
+      winRateCard.innerHTML = failHtml;
+      attendanceCard.innerHTML = failHtml;
+      partnerCard.innerHTML = failHtml;
     });
   }
-
-  tabsEl.addEventListener('click', function (e) {
-    var tabEl = e.target.closest('.rankings-tab');
-    if (!tabEl) return;
-    e.preventDefault();
-    var tab = tabEl.dataset.tab;
-    if (tab === state.tab) return;
-    setActiveTab(tab);
-    state.page = 1;
-    loadRankings(1);
-  });
-
-  prevBtn.addEventListener('click', function () {
-    if (state.page > 1) loadRankings(state.page - 1);
-  });
-
-  nextBtn.addEventListener('click', function () {
-    loadRankings(state.page + 1);
-  });
 
   searchInput.addEventListener('input', function () {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(function () {
       state.q = searchInput.value.trim();
-      loadRankings(1);
+      loadRankings();
     }, 400);
   });
 
@@ -285,21 +282,15 @@
       e.preventDefault();
       clearTimeout(searchTimer);
       state.q = searchInput.value.trim();
-      loadRankings(1);
+      loadRankings();
     }
   });
 
   var initial = new URLSearchParams(window.location.search);
-  state.tab = initial.get('tab') || state.tab;
-  if (['win_rate', 'attendance', 'partner'].indexOf(state.tab) === -1) {
-    state.tab = 'win_rate';
-  }
-  setActiveTab(state.tab);
-  state.page = parseInt(initial.get('page') || '1', 10) || 1;
   state.q = initial.get('q') || '';
   if (state.q) searchInput.value = state.q;
 
-  loadRankings(state.page);
+  loadRankings();
 })();
 </script>
 {% endblock %}

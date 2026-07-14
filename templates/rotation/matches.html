@@ -2,21 +2,35 @@
 {% block title %}对局计分 - {{ session.title }}{% endblock %}
 {% block content %}
 <div class="session-page session-matches-page" data-csrf="{{ csrf_token }}"
-     data-can-score="{% if can_score %}1{% else %}0{% endif %}">
+     data-can-score="{% if can_score %}1{% else %}0{% endif %}"
+     data-is-share="{% if is_share_view %}1{% else %}0{% endif %}">
+  {% if not is_share_view %}
   {% include 'rotation/includes/session_tabs.html' with active_tab='matches' %}
+  {% endif %}
 
   <div class="session-info-card">
     <div class="session-info-title">{{ session.title }}</div>
     {% include 'rotation/includes/session_progress.html' %}
-    {% if not session.scores_editable %}
+    {% if is_share_view %}
+    <div class="match-scores-share-note">分享计分页 · 无需登录即可录入比分</div>
+    {% elif not session.scores_editable %}
     <div class="match-scores-locked-note">比赛已结束，比分已锁定</div>
     {% elif not user.is_authenticated %}
     <div class="match-scores-login-note">登录后可录入比分 · <a href="{% url 'login' %}?next={% url 'session_matches' session.pk %}">去登录</a></div>
     {% endif %}
   </div>
 
+  <div class="match-player-filter-bar" id="matchPlayerFilterBar" hidden>
+    <div class="match-player-filter-text">
+      正在查看 <strong id="matchPlayerFilterName"></strong> 的对阵
+      <span class="match-player-filter-count" id="matchPlayerFilterCount"></span>
+    </div>
+    <button type="button" class="btn btn-outline-secondary btn-sm" id="matchPlayerFilterClear">查看全部</button>
+  </div>
+
   {% for m in flat_matches %}
-  <div class="match-card" id="match-{{ m.pk }}">
+  <div class="match-card" id="match-{{ m.pk }}"
+       data-player-ids="{{ m.team1_player1_id }},{{ m.team1_player2_id }},{{ m.team2_player1_id }},{{ m.team2_player2_id }}">
     <div class="match-card-side">
       <span class="match-card-num">{{ m.match_number }}</span>
       {% if m.is_completed %}
@@ -29,20 +43,18 @@
       <div class="match-teams">
         <div class="match-team match-team--home">
           <div class="match-team-players">
-            <div class="match-player">
-              {% include 'rotation/includes/player_avatar.html' with player=m.team1_player1 size='sm' %}
-              <span class="match-player-name" title="{{ m.team1_player1.display_name }}">{{ m.team1_player1.display_name }}</span>
-            </div>
-            <div class="match-player">
-              {% include 'rotation/includes/player_avatar.html' with player=m.team1_player2 size='sm' %}
-              <span class="match-player-name" title="{{ m.team1_player2.display_name }}">{{ m.team1_player2.display_name }}</span>
-            </div>
+            {% include 'rotation/includes/match_player_cell.html' with player=m.team1_player1 %}
+            {% include 'rotation/includes/match_player_cell.html' with player=m.team1_player2 %}
           </div>
         </div>
 
         <div class="match-score-box"
              data-completed="{% if m.is_completed %}1{% else %}0{% endif %}"
+             {% if is_share_view %}
+             data-action="{% url 'match_score_share' m.pk score_share_token %}"
+             {% else %}
              data-action="{% url 'match_score' m.pk %}"
+             {% endif %}
              data-t1p1="{{ m.team1_player1.display_name }}"
              data-t1p2="{{ m.team1_player2.display_name }}"
              data-t2p1="{{ m.team2_player1.display_name }}"
@@ -64,7 +76,11 @@
           <div class="match-score-inputs match-score-completed">
             <button type="button" class="match-score-open"
                     data-bs-toggle="modal" data-bs-target="#scoreModal"
+                    {% if is_share_view %}
+                    data-action="{% url 'match_score_share' m.pk score_share_token %}"
+                    {% else %}
                     data-action="{% url 'match_score' m.pk %}"
+                    {% endif %}
                     data-s1="{{ m.score_team1 }}"
                     data-s2="{{ m.score_team2 }}"
                     data-t1p1="{{ m.team1_player1.display_name }}"
@@ -79,7 +95,11 @@
                     title="对调比分">⇄</button>
             <button type="button" class="match-score-open"
                     data-bs-toggle="modal" data-bs-target="#scoreModal"
+                    {% if is_share_view %}
+                    data-action="{% url 'match_score_share' m.pk score_share_token %}"
+                    {% else %}
                     data-action="{% url 'match_score' m.pk %}"
+                    {% endif %}
                     data-s1="{{ m.score_team1 }}"
                     data-s2="{{ m.score_team2 }}"
                     data-t1p1="{{ m.team1_player1.display_name }}"
@@ -92,7 +112,13 @@
           </div>
           <div class="match-diff">净胜 {{ m.score_diff }}</div>
           {% else %}
-          <form method="post" action="{% url 'match_score' m.pk %}" class="match-score-form match-score-inline-form">
+          <form method="post"
+                {% if is_share_view %}
+                action="{% url 'match_score_share' m.pk score_share_token %}"
+                {% else %}
+                action="{% url 'match_score' m.pk %}"
+                {% endif %}
+                class="match-score-form match-score-inline-form">
             {% csrf_token %}
             <div class="match-score-inputs">
               <input type="number" name="score_team1" min="0" max="30"
@@ -109,56 +135,72 @@
 
         <div class="match-team match-team--away">
           <div class="match-team-players">
-            <div class="match-player">
-              {% include 'rotation/includes/player_avatar.html' with player=m.team2_player1 size='sm' %}
-              <span class="match-player-name" title="{{ m.team2_player1.display_name }}">{{ m.team2_player1.display_name }}</span>
-            </div>
-            <div class="match-player">
-              {% include 'rotation/includes/player_avatar.html' with player=m.team2_player2 size='sm' %}
-              <span class="match-player-name" title="{{ m.team2_player2.display_name }}">{{ m.team2_player2.display_name }}</span>
-            </div>
+            {% include 'rotation/includes/match_player_cell.html' with player=m.team2_player1 %}
+            {% include 'rotation/includes/match_player_cell.html' with player=m.team2_player2 %}
           </div>
         </div>
       </div>
 
       <div class="match-meta">
         <div class="match-meta-main">
-          <span class="match-meta-label">第 {{ m.round_number }} 轮 · 场地 {{ m.court_number }}</span>
+          <!-- <span class="match-meta-label">第 {{ m.round_number }} 轮 · 场地 {{ m.court_number }}</span> -->
+          {% if m.is_completed and m.scored_by_display %}
+          <span class="match-meta-label">
+            录入：{{ m.scored_by_display }}{% if m.scored_at %} · {{ m.scored_at|date:"H:m:s" }}{% endif %}
+          </span>
+          {% else %}
+          <span class="match-meta-label">
+            尚未开始
+          </span>
+          {% endif %}
           {% if can_score %}
           <div class="match-score-quick">
             <button type="button" class="score-quick-btn" data-s1="19" data-s2="21">19:21</button>
             <button type="button" class="score-quick-btn" data-s1="18" data-s2="21">18:21</button>
             <button type="button" class="score-quick-btn" data-s1="17" data-s2="21">17:21</button>
             <button type="button" class="score-quick-btn" data-s1="16" data-s2="21">16:21</button>
+            <!-- <button type="button" class="score-quick-btn" data-s1="15" data-s2="21">15:21</button> -->
           </div>
           {% endif %}
         </div>
-        {% if m.is_completed and m.scored_by_display %}
+        <!-- {% if m.is_completed and m.scored_by_display %}
         <div class="match-meta-scorer">
           录入：{{ m.scored_by_display }}{% if m.scored_at %} · {{ m.scored_at|date:"m-d H:i" }}{% endif %}
         </div>
-        {% endif %}
+        {% endif %} -->
       </div>
     </div>
   </div>
-  {% empty %}
+  {% endfor %}
+  <div class="session-info-card text-center text-muted py-4" id="matchPlayerFilterEmpty" hidden>
+    <p class="mb-0">该球员在本场暂无对局</p>
+  </div>
+  {% if not flat_matches %}
   <div class="session-info-card text-center text-muted py-4">
     <p class="mb-2">还没有对阵</p>
     <a href="{% url 'session_detail' session.pk %}" class="btn btn-primary btn-sm">返回报名页生成对阵</a>
   </div>
-  {% endfor %}
+  {% endif %}
 </div>
 
 {% include 'rotation/includes/matches_poster.html' %}
 
 {% if flat_matches %}
 <div class="session-bottom-bar">
-  <div class="session-bottom-actions session-bottom-actions-split">
+  <div class="session-bottom-actions session-bottom-actions-split{% if can_share_score %} session-bottom-actions-triple{% endif %}">
+    {% if can_share_score %}
+    <button type="button" class="btn btn-outline-secondary btn-lg session-matches-action-btn" id="shareScoreLinkBtn"
+            data-share-url="{{ share_url }}">
+      分享计分
+    </button>
+    {% endif %}
     <button type="button" class="btn btn-outline-primary btn-lg session-matches-action-btn" id="saveMatchesPosterBtn"
             data-filename="badminton-{{ session.pk }}-matches.png">
       分享对阵图
     </button>
+    {% if not is_share_view %}
     <a href="{% url 'session_leaderboard' session.pk %}" class="btn btn-primary btn-lg session-matches-action-btn">查看成绩</a>
+    {% endif %}
   </div>
 </div>
 {% endif %}
@@ -230,6 +272,7 @@
 
 <script>
 var CAN_SCORE = document.querySelector('.session-matches-page')?.dataset.canScore === '1';
+var IS_SHARE_VIEW = document.querySelector('.session-matches-page')?.dataset.isShare === '1';
 
 function getCsrfToken() {
   var page = document.querySelector('.session-matches-page');
@@ -377,19 +420,20 @@ function applyScoreSaved(box, data) {
       check.classList.remove('pending');
     }
     if (data.scored_by_display) {
-      var meta = card.querySelector('.match-meta');
-      if (meta) {
-        var scorerEl = meta.querySelector('.match-meta-scorer');
+      var metaMain = card.querySelector('.match-meta-main');
+      if (metaMain) {
+        var labelEl = metaMain.querySelector('.match-meta-label');
         var scorerText = '录入：' + data.scored_by_display;
         if (data.scored_at_label) {
           scorerText += ' · ' + data.scored_at_label;
         }
-        if (!scorerEl) {
-          scorerEl = document.createElement('div');
-          scorerEl.className = 'match-meta-scorer';
-          meta.appendChild(scorerEl);
+        if (labelEl) {
+          labelEl.textContent = scorerText;
         }
-        scorerEl.textContent = scorerText;
+      }
+      var staleScorer = card.querySelector('.match-meta-scorer');
+      if (staleScorer) {
+        staleScorer.remove();
       }
     }
   }
@@ -420,7 +464,7 @@ function saveMatchScore(box, s1, s2, onSuccess) {
     body: body,
     credentials: 'same-origin',
   }).then(function (resp) {
-    if (resp.status === 401) {
+    if (resp.status === 401 && !IS_SHARE_VIEW) {
       return resp.json().then(function (data) {
         if (data.login_url) {
           window.location.href = data.login_url;
@@ -676,5 +720,109 @@ PosterSave.bind(
     failMsg: '对阵图生成失败，请重试',
   }
 );
+
+(function () {
+  var btn = document.getElementById('shareScoreLinkBtn');
+  if (!btn) return;
+  btn.addEventListener('click', function () {
+    var url = btn.dataset.shareUrl;
+    if (!url) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(function () {
+        btn.textContent = '已复制链接';
+        setTimeout(function () { btn.textContent = '分享计分'; }, 1500);
+      }).catch(function () {
+        prompt('复制计分分享链接', url);
+      });
+    } else {
+      prompt('复制计分分享链接', url);
+    }
+  });
+})();
+</script>
+<script>
+(function () {
+  var page = document.querySelector('.session-matches-page');
+  if (!page) return;
+
+  var filterBar = document.getElementById('matchPlayerFilterBar');
+  var filterName = document.getElementById('matchPlayerFilterName');
+  var filterCount = document.getElementById('matchPlayerFilterCount');
+  var clearBtn = document.getElementById('matchPlayerFilterClear');
+  var emptyEl = document.getElementById('matchPlayerFilterEmpty');
+  var cards = Array.from(page.querySelectorAll('.match-card[data-player-ids]'));
+  var filterBtns = page.querySelectorAll('.match-player-avatar-filter');
+  var activeId = null;
+
+  if (!cards.length) return;
+
+  function applyFilter(playerId, playerName) {
+    activeId = playerId ? String(playerId) : null;
+    var visible = 0;
+    cards.forEach(function (card) {
+      var ids = card.dataset.playerIds.split(',');
+      var show = !activeId || ids.indexOf(activeId) !== -1;
+      card.hidden = !show;
+      card.classList.toggle('is-player-filtered', !!(activeId && show));
+      if (show) visible += 1;
+    });
+    filterBtns.forEach(function (btn) {
+      btn.classList.toggle('is-active', !!(activeId && btn.dataset.playerId === activeId));
+    });
+    page.querySelectorAll('.match-player[data-player-id]').forEach(function (el) {
+      el.classList.toggle('is-filter-highlight', !!(activeId && el.dataset.playerId === activeId));
+    });
+    if (filterBar) {
+      filterBar.hidden = !activeId;
+    }
+    if (activeId && filterName) {
+      filterName.textContent = playerName || '';
+    }
+    if (filterCount) {
+      filterCount.textContent = activeId ? '（' + visible + ' 场）' : '';
+    }
+    if (emptyEl) {
+      emptyEl.hidden = !activeId || visible > 0;
+    }
+    var params = new URLSearchParams(window.location.search);
+    if (activeId) {
+      params.set('player', activeId);
+    } else {
+      params.delete('player');
+    }
+    var qs = params.toString();
+    history.replaceState(null, '', qs ? ('?' + qs) : window.location.pathname);
+  }
+
+  filterBtns.forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var id = btn.dataset.playerId;
+      if (activeId === id) {
+        applyFilter(null);
+      } else {
+        applyFilter(id, btn.dataset.playerName);
+      }
+    });
+  });
+
+  if (clearBtn) {
+    clearBtn.addEventListener('click', function () {
+      applyFilter(null);
+    });
+  }
+
+  var initial = new URLSearchParams(window.location.search).get('player');
+  if (initial) {
+    var matchBtn = page.querySelector('.match-player-avatar-filter[data-player-id="' + initial + '"]');
+    var playerName = matchBtn ? matchBtn.dataset.playerName : '';
+    if (!playerName) {
+      var nameEl = page.querySelector('.match-player[data-player-id="' + initial + '"] .match-player-name');
+      if (nameEl) playerName = nameEl.textContent.trim();
+    }
+    applyFilter(initial, playerName);
+  }
+})();
 </script>
 {% endblock %}

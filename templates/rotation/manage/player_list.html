@@ -1,0 +1,86 @@
+{% extends 'rotation/base.html' %}
+{% block title %}球员管理 - 羽转{% endblock %}
+{% block content %}
+<div class="session-page manage-page">
+  <div class="manage-header">
+    <h1 class="manage-title">球员管理</h1>
+    <a href="{% url 'manage_player_create' %}" class="btn btn-primary btn-sm manage-header-btn">新增球员</a>
+  </div>
+  {% include 'rotation/includes/manage_tabs.html' %}
+
+  <form method="get" class="manage-filter-form">
+    <input type="search" name="q" value="{{ q }}" class="form-control player-list-search"
+           placeholder="搜索姓名、昵称、手机号或用户名…">
+    {% if filter_clubs %}
+    <select name="club" class="form-select manage-club-filter">
+      <option value="">全部俱乐部</option>
+      {% for c in filter_clubs %}
+      <option value="{{ c.pk }}"{% if club_id == c.pk %} selected{% endif %}>{{ c.name }}</option>
+      {% endfor %}
+    </select>
+    {% endif %}
+    <button type="submit" class="btn btn-outline-primary btn-sm">搜索</button>
+  </form>
+
+  <p class="player-page-subtitle club-section-subtitle">共 {{ page_obj.paginator.count }} 人</p>
+
+  {% if page_obj.object_list %}
+  <div class="player-list-card">
+    {% for player in page_obj.object_list %}
+    <div class="player-list-item manage-player-item">
+      {% include 'rotation/includes/player_avatar.html' with player=player size='md' %}
+      <div class="player-list-info">
+        <div class="player-list-name">{{ player.display_name }}</div>
+        <div class="player-list-meta">
+          {{ player.name }}
+          {% if player.club %} · {{ player.club.name }}{% endif %}
+          · {% if player.gender %}{{ player.get_gender_display }}{% else %}性别未设置{% endif %}
+        </div>
+        <div class="player-list-login">
+          {% if player.login_username %}
+          登录用户名 {{ player.login_username }}
+          {% else %}
+          <span class="player-list-login-none">未开通登录账号</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="manage-player-actions">
+        <a href="{% url 'manage_player_edit' player.pk %}" class="btn btn-outline-secondary btn-sm">编辑</a>
+        {% if not player.user %}
+        <form method="post" action="{% url 'manage_player_enable_account' player.pk %}"
+              class="manage-player-action-form"
+              onsubmit="return confirm('为 {{ player.display_name|escapejs }} 开通登录账号？\n默认密码 666666');">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <button type="submit" class="btn btn-outline-success btn-sm">开通登录账号</button>
+        </form>
+        {% else %}
+        <a href="{% url 'manage_player_password' player.pk %}" class="btn btn-outline-primary btn-sm">改密码</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if page_obj.paginator.num_pages > 1 %}
+  <nav class="player-list-pagination" aria-label="球员分页">
+    {% if page_obj.has_previous %}
+    <a href="?page={{ page_obj.previous_page_number }}{% if q %}&q={{ q|urlencode }}{% endif %}{% if club_id %}&club={{ club_id }}{% endif %}"
+       class="player-list-page-btn">上一页</a>
+    {% else %}
+    <span class="player-list-page-btn disabled">上一页</span>
+    {% endif %}
+    <span class="player-list-page-info">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+    <a href="?page={{ page_obj.next_page_number }}{% if q %}&q={{ q|urlencode }}{% endif %}{% if club_id %}&club={{ club_id }}{% endif %}"
+       class="player-list-page-btn">下一页</a>
+    {% else %}
+    <span class="player-list-page-btn disabled">下一页</span>
+    {% endif %}
+  </nav>
+  {% endif %}
+  {% else %}
+  <div class="player-list-placeholder">暂无球员{% if q %}，试试其他关键词{% endif %}</div>
+  {% endif %}
+</div>
+{% endblock %}

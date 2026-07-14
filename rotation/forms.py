@@ -8,7 +8,7 @@ from rotation.models import Match, Player, Session
 
 
 def default_session_title(player_count):
-    return f'{player_count}人多人轮转赛'
+    return f'{player_count}人多人轮转赛|{timezone.localtime().date().strftime("%m-%d")}'
 
 
 def default_event_schedule():
@@ -171,6 +171,16 @@ class PlayerAvatarForm(forms.ModelForm):
         if avatar and avatar.size > 10 * 1024 * 1024:
             raise forms.ValidationError('图片大小不能超过 10MB')
         return avatar
+
+
+class PlayerGenderForm(forms.ModelForm):
+    class Meta:
+        model = Player
+        fields = ['gender']
+        labels = {'gender': '性别'}
+        widgets = {
+            'gender': forms.Select(attrs={'class': 'form-select'}),
+        }
 
 
 class RegistrationForm(forms.Form):
